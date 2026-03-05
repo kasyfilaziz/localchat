@@ -1,5 +1,3 @@
-import { streamText } from 'ai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
@@ -11,19 +9,15 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'API key and endpoint are required' }, { status: 400 });
 		}
 
-		console.log('[Vercel SDK] Using endpoint:', endpoint);
-		console.log('[Vercel SDK] Using model:', model || 'MiniMax-M2.5');
+		console.log('[MiniMax Proxy] Using endpoint:', endpoint);
+		console.log('[MiniMax Proxy] Using model:', model || 'MiniMax-M2');
 
-		// Determine the correct baseURL based on the provider
-		let baseURL = endpoint.replace(/\/$/, '');
+		// Build the URL - MiniMax uses /v1/chat/completions
+		const baseURL = endpoint.replace(/\/$/, '');
+		const url = `${baseURL}/chat/completions`;
 
-		const provider = createOpenAICompatible({
-			name: 'custom',
-			baseURL: baseURL,
-			apiKey
-		});
-
-		const formattedMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
+		// Build messages - MiniMax format
+		const formattedMessages: { role: string; content: string }[] = [];
 		
 		if (systemPrompt) {
 			formattedMessages.push({ role: 'system', content: systemPrompt });
@@ -31,19 +25,44 @@ export const POST: RequestHandler = async ({ request }) => {
 		
 		for (const msg of messages) {
 			formattedMessages.push({
-				role: msg.role as 'system' | 'user' | 'assistant',
+				role: msg.role,
 				content: msg.content
 			});
 		}
 
-		const modelName = model || 'MiniMax-M2.5';
+		// Only send supported parameters for MiniMax
+		const requestBody: Record<string, unknown> = {
+			model: model || 'MiniMax-M2',
+			messages: formattedMessages,
+			stream: true
+		};
 
-		const result = streamText({
-			model: provider(modelName) as any,
-			messages: formattedMessages as any
+		console.log('[MiniMax Proxy] Request body:', JSON.stringify(requestBody));
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${apiKey}`
+			},
+			body: JSON.stringify(requestBody)
 		});
 
-		return new Response(result.toTextStreamResponse().body, {
+		if (!response.ok) {
+			const errorText = await response.text();
+			console.error('[MiniMax Proxy] HTTP Error:', response.status, errorText);
+			return json({ 
+				error: `MiniMax API Error: ${response.status}`,
+				details: errorText
+			}, { status: response.status });
+		}
+
+		if (!response.body) {
+			return json({ error: 'No response body' }, { status: 500 });
+		}
+
+		// Stream the response
+		return new Response(response.body, {
 			headers: {
 				'Content-Type': 'text/event-stream',
 				'Cache-Control': 'no-cache',
@@ -52,17 +71,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 
 	} catch (error) {
-		console.error('[Vercel SDK] Error:', error);
-		
+		console.error('[MiniMax Proxy] Error:', error);
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-		
-		if (errorMessage.includes('invalid params')) {
-			return json({ 
-				error: 'MiniMax API Error: invalid parameters. Please check your model name and settings.',
-				details: errorMessage
-			}, { status: 400 });
-		}
-		
 		return json({ error: errorMessage }, { status: 500 });
 	}
 };
