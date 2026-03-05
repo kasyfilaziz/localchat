@@ -12,15 +12,18 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		console.log('[Vercel SDK] Using endpoint:', endpoint);
-		console.log('[Vercel SDK] Using model:', model || 'llama3');
+		console.log('[Vercel SDK] Using model:', model || 'MiniMax-M2.5');
+
+		// Determine the correct baseURL based on the provider
+		let baseURL = endpoint.replace(/\/$/, '');
 
 		const provider = createOpenAICompatible({
 			name: 'custom',
-			baseURL: endpoint,
+			baseURL: baseURL,
 			apiKey
 		});
 
-		const formattedMessages: { role: string; content: string }[] = [];
+		const formattedMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
 		
 		if (systemPrompt) {
 			formattedMessages.push({ role: 'system', content: systemPrompt });
@@ -28,13 +31,15 @@ export const POST: RequestHandler = async ({ request }) => {
 		
 		for (const msg of messages) {
 			formattedMessages.push({
-				role: msg.role,
+				role: msg.role as 'system' | 'user' | 'assistant',
 				content: msg.content
 			});
 		}
 
+		const modelName = model || 'MiniMax-M2.5';
+
 		const result = streamText({
-			model: provider(model || 'llama3') as any,
+			model: provider(modelName) as any,
 			messages: formattedMessages as any
 		});
 
@@ -48,6 +53,16 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	} catch (error) {
 		console.error('[Vercel SDK] Error:', error);
-		return json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+		
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		
+		if (errorMessage.includes('invalid params')) {
+			return json({ 
+				error: 'MiniMax API Error: invalid parameters. Please check your model name and settings.',
+				details: errorMessage
+			}, { status: 400 });
+		}
+		
+		return json({ error: errorMessage }, { status: 500 });
 	}
 };
