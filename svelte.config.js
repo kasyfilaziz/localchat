@@ -5,9 +5,6 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
 	preprocess: vitePreprocess(),
 	kit: {
-		paths: {
-			base: '/localchat'
-		},
 		adapter: adapter({
 			pages: 'build',
 			assets: 'build',
