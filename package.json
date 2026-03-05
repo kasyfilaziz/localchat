@@ -1,0 +1,37 @@
+{
+	"name": "localchat",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/kit": "^2.50.2",
+		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"@tailwindcss/vite": "^4.2.1",
+		"@types/dompurify": "^3.0.5",
+		"@types/marked": "^5.0.2",
+		"@vite-pwa/sveltekit": "^1.1.0",
+		"sharp": "^0.34.5",
+		"svelte": "^5.51.0",
+		"svelte-check": "^4.4.2",
+		"tailwindcss": "^4.2.1",
+		"typescript": "^5.9.3",
+		"vite": "^7.3.1"
+	},
+	"dependencies": {
+		"@ai-sdk/openai-compatible": "^2.0.31",
+		"ai": "^6.0.105",
+		"dexie": "^4.3.0",
+		"dompurify": "^3.3.1",
+		"highlight.js": "^11.11.1",
+		"marked": "^17.0.3"
+	}
+}
