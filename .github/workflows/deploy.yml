@@ -36,6 +36,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: build
+          name: github-pages-${{ github.run_id }}
 
   deploy:
     needs: build
