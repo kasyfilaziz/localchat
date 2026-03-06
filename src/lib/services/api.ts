@@ -277,6 +277,8 @@ export async function sendMessage(
 				toolResults,
 				onToolCall: undefined
 			});
+			
+			await options.onComplete?.();
 		} else {
 			await options.onComplete?.();
 		}
