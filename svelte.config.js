@@ -11,7 +11,10 @@ const config = {
 			fallback: 'index.html',
 			precompress: false,
 			strict: true
-		})
+		}),
+		paths: {
+			base: '/localchat'
+		}
 	}
 };
 
