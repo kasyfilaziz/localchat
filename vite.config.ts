@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 
 export default defineConfig({
+	base: '/localchat/',
 	plugins: [
 		tailwindcss(),
 		sveltekit(),
@@ -16,8 +17,8 @@ export default defineConfig({
 				theme_color: '#3b82f6',
 				background_color: '#ffffff',
 				display: 'standalone',
-				start_url: '/',
-				scope: '/',
+				start_url: '/localchat/',
+				scope: '/localchat/',
 				icons: [
 					{
 						src: 'icons/icon-192.png',
