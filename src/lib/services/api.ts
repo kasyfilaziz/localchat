@@ -1,20 +1,26 @@
 import { getApiKey, getApiEndpoint } from './settings';
 import type { Message } from './db';
+import { getToolDefinitions, executeToolCalls, type ToolCall, type ToolCallResult } from '../tools';
 
 export interface ChatMessage {
-	role: 'user' | 'assistant' | 'system';
+	role: 'user' | 'assistant' | 'system' | 'tool';
 	content: string;
+	tool_call_id?: string;
+	name?: string;
 }
 
 export interface StreamOptions {
 	messages: Message[];
 	systemPrompt?: string;
+	toolsEnabled?: boolean;
 	onChunk: (text: string) => void;
+	onToolCall?: (toolCalls: ToolCall[]) => void | Promise<void>;
+	onToolResult?: (results: ToolCallResult[]) => void | Promise<void>;
 	onComplete?: () => void | Promise<void>;
 	onError?: (error: Error) => void | Promise<void>;
 }
 
-function formatMessages(options: StreamOptions): ChatMessage[] {
+function formatMessages(options: StreamOptions, toolResults?: ToolCallResult[]): ChatMessage[] {
 	const formatted: ChatMessage[] = [];
 
 	if (options.systemPrompt) {
@@ -25,19 +31,59 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 	}
 
 	for (const msg of options.messages) {
-		formatted.push({
-			role: msg.role,
-			content: msg.content
-		});
+		if (msg.role === 'tool') {
+			formatted.push({
+				role: 'tool',
+				content: msg.content,
+				tool_call_id: msg.tool_call_id
+			});
+		} else if (msg.role === 'assistant' && msg.tool_calls) {
+			try {
+				const tcs = JSON.parse(msg.tool_calls);
+				for (const tc of tcs) {
+					formatted.push({
+						role: 'assistant',
+						content: '',
+						tool_call_id: tc.id,
+						name: tc.function.name
+					});
+				}
+			} catch {
+				formatted.push({
+					role: msg.role,
+					content: msg.content
+				});
+			}
+		} else {
+			formatted.push({
+				role: msg.role,
+				content: msg.content
+			});
+		}
+	}
+
+	if (toolResults) {
+		for (const tr of toolResults) {
+			formatted.push({
+				role: 'tool',
+				content: tr.output,
+				tool_call_id: tr.tool_call_id
+			});
+		}
 	}
 
 	return formatted;
 }
 
-export async function sendMessage(
+async function sendRequest(
 	model: string,
-	options: StreamOptions
-): Promise<void> {
+	messages: ChatMessage[],
+	toolsEnabled: boolean,
+	callbacks: {
+		onChunk: (text: string) => void;
+		onToolCall?: (toolCalls: ToolCall[]) => void;
+	}
+): Promise<{ content: string; toolCalls?: ToolCall[] }> {
 	const apiKey = await getApiKey();
 	const endpoint = await getApiEndpoint();
 
@@ -45,78 +91,173 @@ export async function sendMessage(
 		throw new Error('API key not configured');
 	}
 
-	const formattedMessages = formatMessages(options);
 	const url = endpoint.replace(/\/$/, '') + '/chat/completions';
 
-	console.log('[API] Sending request:', { model, url });
+	const requestBody: Record<string, unknown> = {
+		model,
+		messages,
+		stream: true
+	};
 
-	try {
-		const response = await fetch(url, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': `Bearer ${apiKey}`
-			},
-			body: JSON.stringify({
-				model,
-				messages: formattedMessages,
-				stream: true
-			})
-		});
+	if (toolsEnabled) {
+		requestBody.tools = getToolDefinitions();
+	}
 
-		if (!response.ok) {
-			const errorText = await response.text();
-			console.error('[API] HTTP Error:', response.status, errorText);
-			throw new Error(`API Error: ${response.status} - ${errorText}`);
+	console.log('[API] Sending request:', { model, url, toolsEnabled, messageCount: messages.length });
+
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Authorization': `Bearer ${apiKey}`
+		},
+		body: JSON.stringify(requestBody)
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		console.error('[API] HTTP Error:', response.status, errorText);
+		throw new Error(`API Error: ${response.status} - ${errorText}`);
+	}
+
+	if (!response.body) {
+		throw new Error('No response body');
+	}
+
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	let currentToolCalls: ToolCall[] = [];
+	let currentToolCallId = '';
+	let currentToolName = '';
+	let currentToolArguments = '';
+	let content = '';
+
+	while (true) {
+		const { done, value } = await reader.read();
+
+		if (done) {
+			break;
 		}
 
-		if (!response.body) {
-			throw new Error('No response body');
-		}
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() || '';
 
-		const reader = response.body.getReader();
-		const decoder = new TextDecoder();
-		let buffer = '';
-
-		while (true) {
-			const { done, value } = await reader.read();
-
-			if (done) {
-				break;
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed || !trimmed.startsWith('data: ')) {
+				continue;
 			}
 
-			buffer += decoder.decode(value, { stream: true });
-			const lines = buffer.split('\n');
-			buffer = lines.pop() || '';
+			const data = trimmed.slice(6);
 
-			for (const line of lines) {
-				const trimmed = line.trim();
-				if (!trimmed || !trimmed.startsWith('data: ')) {
-					continue;
+			if (data === '[DONE]') {
+				if (currentToolCallId && currentToolName) {
+					currentToolCalls.push({
+						id: currentToolCallId,
+						type: 'function',
+						function: {
+							name: currentToolName,
+							arguments: currentToolArguments
+						}
+					});
+				}
+				return { content, toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined };
+			}
+
+			try {
+				const parsed = JSON.parse(data);
+				const delta = parsed.choices?.[0]?.delta;
+
+				const deltaContent = delta?.content;
+				const reasoning = delta?.reasoning_content || delta?.reasoning;
+
+				if (deltaContent) {
+					content += deltaContent;
+					callbacks.onChunk(deltaContent);
+				}
+				if (reasoning) {
+					content += reasoning;
+					callbacks.onChunk(reasoning);
 				}
 
-				const data = trimmed.slice(6);
-
-				if (data === '[DONE]') {
-					await options.onComplete?.();
-					return;
-				}
-
-				try {
-					const parsed = JSON.parse(data);
-					const content = parsed.choices?.[0]?.delta?.content;
-					const reasoning =
-						parsed.choices?.[0]?.delta?.reasoning_content ||
-						parsed.choices?.[0]?.delta?.reasoning;
-					if (content) {
-						options.onChunk(content);
+				if (delta?.tool_calls) {
+					for (const tc of delta.tool_calls) {
+						if (tc.id && tc.id !== currentToolCallId) {
+							if (currentToolCallId && currentToolName) {
+								currentToolCalls.push({
+									id: currentToolCallId,
+									type: 'function',
+									function: {
+										name: currentToolName,
+										arguments: currentToolArguments
+									}
+								});
+							}
+							currentToolCallId = tc.id;
+							currentToolName = tc.function?.name || '';
+							currentToolArguments = tc.function?.arguments || '';
+						} else if (tc.function?.arguments) {
+							currentToolArguments += tc.function.arguments;
+						}
 					}
-					if (reasoning) {
-						options.onChunk(reasoning);
-					}
-				} catch (e) {
-					// Skip malformed JSON
 				}
+			} catch (e) {
+				// Skip malformed JSON
+			}
+		}
+	}
+
+	if (currentToolCallId && currentToolName) {
+		currentToolCalls.push({
+			id: currentToolCallId,
+			type: 'function',
+			function: {
+				name: currentToolName,
+				arguments: currentToolArguments
+			}
+		});
+	}
+
+	return { content, toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined };
+}
+
+export async function sendMessage(
+	model: string,
+	options: StreamOptions
+): Promise<void> {
+	try {
+		let toolResults: ToolCallResult[] | undefined;
+		let toolCallsProcessed = false;
+		let finalContent = '';
+
+		while (!toolCallsProcessed) {
+			const messages = formatMessages(options, toolResults);
+			
+			const result = await sendRequest(
+				model,
+				messages,
+				Boolean(options.toolsEnabled && !toolResults),
+				{
+					onChunk: (chunk) => {
+						if (!toolResults) {
+							options.onChunk(chunk);
+						}
+						finalContent += chunk;
+					},
+					onToolCall: options.onToolCall
+				}
+			);
+
+			if (result.toolCalls && result.toolCalls.length > 0 && !toolResults) {
+				await options.onToolCall?.(result.toolCalls);
+				
+				toolResults = await executeToolCalls(result.toolCalls);
+				await options.onToolResult?.(toolResults);
+			} else {
+				toolCallsProcessed = true;
 			}
 		}
 

@@ -25,9 +25,12 @@ export interface Session {
 export interface Message {
 	id?: number;
 	sessionId: number;
-	role: 'user' | 'assistant' | 'system';
+	role: 'user' | 'assistant' | 'system' | 'tool';
 	content: string;
 	timestamp: Date;
+	tool_call_id?: string;
+	tool_calls?: string;
+	tool_results?: string;
 }
 
 export interface MCPTool {

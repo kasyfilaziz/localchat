@@ -28,7 +28,7 @@ export async function saveApiEndpoint(endpoint: string): Promise<void> {
 
 export async function getApiEndpoint(): Promise<string> {
 	const record = await db.settings.get('apiEndpoint');
-	return record?.value || 'http://localhost:11434/v1';
+	return record?.value || 'https://api.minimax.io/v1';
 }
 
 export async function hasApiKey(): Promise<boolean> {
@@ -45,7 +45,7 @@ export async function saveSelectedModel(model: string): Promise<void> {
 
 export async function getSelectedModel(): Promise<string> {
 	const record = await db.settings.get('selectedModel');
-	return record?.value || 'llama3';
+	return record?.value || 'MiniMax-M2.5';
 }
 
 export async function saveDefaultModel(model: string): Promise<void> {
@@ -57,7 +57,7 @@ export async function saveDefaultModel(model: string): Promise<void> {
 
 export async function getDefaultModel(): Promise<string> {
 	const record = await db.settings.get('defaultModel');
-	return record?.value || 'llama3';
+	return record?.value || 'MiniMax-M2.5';
 }
 
 export async function saveSelectedPromptId(promptId: number | null): Promise<void> {

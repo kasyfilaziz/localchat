@@ -11,7 +11,7 @@ export async function getSession(id: number): Promise<Session | undefined> {
 
 export async function createSession(
 	title: string = 'New Chat',
-	model: string = 'llama3',
+	model: string = 'MiniMax-M2.5',
 	systemPromptId: number | null = null
 ): Promise<number> {
 	const now = new Date();
@@ -57,13 +57,15 @@ export async function getSessionMessages(sessionId: number): Promise<Message[]> 
 export async function addMessage(
 	sessionId: number,
 	role: Message['role'],
-	content: string
+	content: string,
+	toolCallId?: string
 ): Promise<number> {
 	const id = await db.messages.add({
 		sessionId,
 		role,
 		content,
-		timestamp: new Date()
+		timestamp: new Date(),
+		tool_call_id: toolCallId
 	});
 
 	await db.sessions.update(sessionId, {
@@ -80,8 +82,20 @@ export async function updateSessionTitle(sessionId: number, title: string): Prom
 	});
 }
 
-export async function updateMessage(id: number, content: string): Promise<void> {
-	await db.messages.update(id, { content });
+export async function updateMessage(
+	id: number, 
+	content: string, 
+	toolCalls?: string,
+	toolResults?: string
+): Promise<void> {
+	const updates: Partial<Message> = { content };
+	if (toolCalls !== undefined) {
+		updates.tool_calls = toolCalls;
+	}
+	if (toolResults !== undefined) {
+		updates.tool_results = toolResults;
+	}
+	await db.messages.update(id, updates);
 }
 
 export function generateTitleFromMessage(content: string): string {

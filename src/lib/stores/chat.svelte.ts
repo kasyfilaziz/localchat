@@ -2,6 +2,7 @@ import type { Session, Message, SystemPrompt } from '$lib/services/db';
 import * as chat from '$lib/services/chat';
 import * as settings from '$lib/services/settings';
 import { sendMessage } from '$lib/services/api';
+import type { ToolCall, ToolCallResult } from '$lib/tools';
 
 class ChatStore {
 	sessions = $state<Session[]>([]);
@@ -10,11 +11,14 @@ class ChatStore {
 	isLoading = $state(false);
 	streamingContent = $state('');
 	error = $state<string | null>(null);
+	pendingToolCalls = $state<ToolCall[]>([]);
+	toolResults = $state<ToolCallResult[]>([]);
 
 	systemPrompts = $state<SystemPrompt[]>([]);
-	selectedModel = $state('llama3');
+	selectedModel = $state('MiniMax-M2.5');
 	selectedPromptId = $state<number | null>(null);
 	availableModels = $state<string[]>([]);
+	toolsEnabled = $state(true);
 
 	async initialize() {
 		this.systemPrompts = await settings.getSystemPrompts();
@@ -88,6 +92,8 @@ class ChatStore {
 		this.isLoading = true;
 		this.error = null;
 		this.streamingContent = '';
+		this.pendingToolCalls = [];
+		this.toolResults = [];
 
 		const userMessageId = await chat.addMessage(this.currentSession.id!, 'user', content.trim());
 		
@@ -129,15 +135,32 @@ class ChatStore {
 
 		try {
 			await sendMessage(this.selectedModel, {
-				messages: this.messages,
+				messages: this.messages.filter(m => m.role !== 'tool'),
 				systemPrompt,
+				toolsEnabled: this.toolsEnabled,
 				onChunk: (chunk) => {
 					this.streamingContent += chunk;
+				},
+				onToolCall: async (toolCalls) => {
+					this.pendingToolCalls = toolCalls;
+					const toolCallsStr = JSON.stringify(toolCalls);
+					await chat.updateMessage(assistantMessageId, '', toolCallsStr);
+				},
+				onToolResult: async (results) => {
+					this.toolResults = results;
+					const toolResultsStr = JSON.stringify(results);
+					await chat.updateMessage(assistantMessageId, '', undefined, toolResultsStr);
+					
+					this.messages = this.messages.map(m => 
+						m.id === assistantMessageId 
+							? { ...m, tool_calls: JSON.stringify(this.pendingToolCalls), tool_results: toolResultsStr }
+							: m
+					);
 				},
 				onComplete: async () => {
 					try {
 						const finalContent = this.streamingContent;
-						await chat.updateMessage(assistantMessageId, finalContent);
+						await chat.updateMessage(assistantMessageId, finalContent, this.pendingToolCalls.length > 0 ? JSON.stringify(this.pendingToolCalls) : undefined);
 						this.messages = this.messages.map(m => 
 							m.id === assistantMessageId 
 								? { ...m, content: finalContent }
