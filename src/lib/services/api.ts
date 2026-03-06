@@ -6,6 +6,7 @@ export interface ChatMessage {
 	role: 'user' | 'assistant' | 'system' | 'tool';
 	content: string;
 	tool_call_id?: string;
+	tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
 	name?: string;
 }
 
@@ -40,14 +41,11 @@ function formatMessages(options: StreamOptions, toolResults?: ToolCallResult[]):
 		} else if (msg.role === 'assistant' && msg.tool_calls) {
 			try {
 				const tcs = JSON.parse(msg.tool_calls);
-				for (const tc of tcs) {
-					formatted.push({
-						role: 'assistant',
-						content: '',
-						tool_call_id: tc.id,
-						name: tc.function.name
-					});
-				}
+				formatted.push({
+					role: 'assistant',
+					content: '',
+					tool_calls: tcs
+				});
 			} catch {
 				formatted.push({
 					role: msg.role,
