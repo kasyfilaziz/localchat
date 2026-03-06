@@ -33,13 +33,14 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 		});
 	}
 
-	// If we have contextMessages (with tool_calls), skip original assistant messages
-	// to avoid duplicate/invalid assistant messages
-	const skipAssistant = Boolean(options.contextMessages);
-
 	for (const msg of options.messages) {
-		if (skipAssistant && msg.role === 'assistant') {
-			continue; // Skip - contextMessages has the proper assistant with tool_calls
+		// If we have contextMessages, skip ONLY empty assistant messages (without tool_calls)
+		// Keep assistant messages that have tool_calls from previous response
+		if (options.contextMessages && msg.role === 'assistant') {
+			const hasToolCalls = msg.tool_calls && msg.tool_calls.trim().length > 0;
+			if (!hasToolCalls) {
+				continue; // Skip empty assistant message
+			}
 		}
 		
 		if (msg.role === 'tool') {
