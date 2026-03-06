@@ -14,6 +14,8 @@ export interface StreamOptions {
 	messages: Message[];
 	systemPrompt?: string;
 	toolsEnabled?: boolean;
+	contextMessages?: ChatMessage[];
+	toolResults?: ToolCallResult[];
 	onChunk: (text: string) => void;
 	onToolCall?: (toolCalls: ToolCall[]) => void | Promise<void>;
 	onToolResult?: (results: ToolCallResult[]) => void | Promise<void>;
@@ -21,7 +23,7 @@ export interface StreamOptions {
 	onError?: (error: Error) => void | Promise<void>;
 }
 
-function formatMessages(options: StreamOptions, toolResults?: ToolCallResult[]): ChatMessage[] {
+function formatMessages(options: StreamOptions): ChatMessage[] {
 	const formatted: ChatMessage[] = [];
 
 	if (options.systemPrompt) {
@@ -60,8 +62,12 @@ function formatMessages(options: StreamOptions, toolResults?: ToolCallResult[]):
 		}
 	}
 
-	if (toolResults) {
-		for (const tr of toolResults) {
+	if (options.contextMessages) {
+		formatted.push(...options.contextMessages);
+	}
+
+	if (options.toolResults) {
+		for (const tr of options.toolResults) {
 			formatted.push({
 				role: 'tool',
 				content: tr.output,
@@ -227,39 +233,44 @@ export async function sendMessage(
 	options: StreamOptions
 ): Promise<void> {
 	try {
-		let toolResults: ToolCallResult[] | undefined;
-		let toolCallsProcessed = false;
-		let finalContent = '';
-
-		while (!toolCallsProcessed) {
-			const messages = formatMessages(options, toolResults);
-			
-			const result = await sendRequest(
-				model,
-				messages,
-				Boolean(options.toolsEnabled && !toolResults),
-				{
-					onChunk: (chunk) => {
-						if (!toolResults) {
-							options.onChunk(chunk);
-						}
-						finalContent += chunk;
-					},
-					onToolCall: options.onToolCall
-				}
-			);
-
-			if (result.toolCalls && result.toolCalls.length > 0 && !toolResults) {
-				await options.onToolCall?.(result.toolCalls);
-				
-				toolResults = await executeToolCalls(result.toolCalls);
-				await options.onToolResult?.(toolResults);
-			} else {
-				toolCallsProcessed = true;
+		const result = await sendRequest(
+			model,
+			formatMessages(options),
+			Boolean(options.toolsEnabled),
+			{
+				onChunk: options.onChunk,
+				onToolCall: options.onToolCall
 			}
-		}
+		);
 
-		await options.onComplete?.();
+		if (result.toolCalls && result.toolCalls.length > 0) {
+			await options.onToolCall?.(result.toolCalls);
+			
+			const toolResults = await executeToolCalls(result.toolCalls);
+			await options.onToolResult?.(toolResults);
+
+			const contextMessages: ChatMessage[] = [
+				{
+					role: 'assistant',
+					content: '',
+					tool_calls: result.toolCalls.map(tc => ({
+						id: tc.id,
+						type: tc.type,
+						function: tc.function
+					}))
+				}
+			];
+
+			await sendMessage(model, {
+				...options,
+				toolsEnabled: false,
+				contextMessages,
+				toolResults,
+				onToolCall: undefined
+			});
+		} else {
+			await options.onComplete?.();
+		}
 	} catch (error) {
 		console.error('[API] Error:', error);
 		await options.onError?.(error instanceof Error ? error : new Error(String(error)));
