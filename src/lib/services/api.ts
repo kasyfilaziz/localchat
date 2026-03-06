@@ -33,7 +33,15 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 		});
 	}
 
+	// If we have contextMessages (with tool_calls), skip original assistant messages
+	// to avoid duplicate/invalid assistant messages
+	const skipAssistant = Boolean(options.contextMessages);
+
 	for (const msg of options.messages) {
+		if (skipAssistant && msg.role === 'assistant') {
+			continue; // Skip - contextMessages has the proper assistant with tool_calls
+		}
+		
 		if (msg.role === 'tool') {
 			formatted.push({
 				role: 'tool',
