@@ -200,6 +200,13 @@ class ChatStore {
 				},
 				onError: async (err) => {
 					this.error = err.message;
+					// Update assistant message with error info
+					await chat.updateMessage(assistantMessageId, `Error: ${err.message}`);
+					this.messages = this.messages.map(m => 
+						m.id === assistantMessageId 
+							? { ...m, content: `Error: ${err.message}` }
+							: m
+					);
 					this.isLoading = false;
 					this.streamingContent = '';
 				}

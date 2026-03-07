@@ -1,4 +1,5 @@
 import { getApiKey, getApiEndpoint } from './settings';
+import type { Message } from './db';
 import { getToolDefinitions, executeToolCalls, type ToolCall, type ToolCallResult } from '../tools';
 
 export interface ChatMessage {
