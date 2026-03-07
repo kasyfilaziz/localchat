@@ -43,7 +43,7 @@
 		<div class="flex-1 flex flex-col min-h-0">
 			<ChatHeader onOpenSidebar={openSidebar} chatTitle={chatStore.currentSession?.title} />
 			<MessageList />
-			<ChatInput />
+			<ChatInput sidebarOpen={sidebarOpen} />
 		</div>
 		<SettingsModal isOpen={settingsOpen} onClose={closeSettings} />
 	{:else}

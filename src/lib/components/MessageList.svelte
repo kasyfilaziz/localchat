@@ -15,7 +15,7 @@
 	});
 </script>
 
-<div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 pb-32 bg-white dark:bg-gray-900">
+<div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 pb-40 bg-white dark:bg-gray-900">
 	{#if !chatStore.currentSession}
 		<div class="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">
 			<div class="text-center px-4">

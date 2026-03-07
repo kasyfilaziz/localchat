@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { chatStore } from '$lib/stores/chat.svelte';
 
+	interface Props {
+		sidebarOpen?: boolean;
+	}
+
+	let { sidebarOpen = false }: Props = $props();
+
 	let inputValue = $state('');
 	let textareaRef: HTMLTextAreaElement;
 
@@ -31,7 +37,7 @@
 	});
 </script>
 
-<div class="fixed bottom-6 left-4 right-4 z-50">
+<div class="fixed bottom-6 left-4 right-4 {sidebarOpen ? 'z-60' : 'z-50'}">
 	<div class="max-w-4xl mx-auto">
 		<div class="flex gap-2 items-end rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2">
 			<div class="flex-1 relative">

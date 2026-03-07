@@ -25,10 +25,22 @@ class ChatStore {
 		this.selectedModel = await settings.getSelectedModel();
 		this.selectedPromptId = await settings.getSelectedPromptId();
 		await this.loadSessions();
+		
+		const lastSessionId = localStorage.getItem('lastSessionId');
+		if (lastSessionId) {
+			const sessionId = parseInt(lastSessionId, 10);
+			if (!isNaN(sessionId)) {
+				await this.loadSession(sessionId);
+			}
+		}
 	}
 
 	async loadSessions() {
 		this.sessions = await chat.getSessions();
+	}
+
+	async saveLastSessionId(sessionId: number) {
+		localStorage.setItem('lastSessionId', sessionId.toString());
 	}
 
 	async loadSession(sessionId: number) {
@@ -38,6 +50,7 @@ class ChatStore {
 			this.messages = await chat.getSessionMessages(sessionId);
 			this.selectedModel = session.model;
 			this.selectedPromptId = session.systemPromptId;
+			this.saveLastSessionId(sessionId);
 		}
 	}
 
