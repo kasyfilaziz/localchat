@@ -135,7 +135,11 @@ class ChatStore {
 
 		try {
 			await sendMessage(this.selectedModel, {
-				messages: this.messages.filter(m => m.role !== 'assistant' || (m.content && m.content.trim().length > 0)),
+				messages: this.messages.filter(m => {
+					if (m.role !== 'assistant') return true;
+					const content = typeof m.content === 'string' ? m.content : '';
+					return content.trim().length > 0;
+				}),
 				systemPrompt,
 				toolsEnabled: this.toolsEnabled,
 				onChunk: (chunk) => {

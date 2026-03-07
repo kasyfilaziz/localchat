@@ -67,6 +67,11 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 					content: contentValue
 				});
 			}
+		} else if (msg.role === 'user' && Array.isArray(msg.content)) {
+			formatted.push({
+				role: msg.role,
+				content: msg.content
+			});
 		} else if (msg.role === 'assistant' && msg.content) {
 			const contentValue = typeof msg.content === 'string' ? msg.content : '';
 			formatted.push({
