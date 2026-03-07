@@ -1,5 +1,4 @@
 import { getApiKey, getApiEndpoint } from './settings';
-import type { Message } from './db';
 import { getToolDefinitions, executeToolCalls, type ToolCall, type ToolCallResult } from '../tools';
 
 export interface ChatMessage {
@@ -235,7 +234,7 @@ async function executeWithTools(
 	options: StreamOptions,
 	initialMessages: ChatMessage[]
 ): Promise<{ content: string; toolCalls: ToolCall[] }> {
-	let currentMessages = [...initialMessages];
+	let currentMessages = structuredClone(initialMessages);
 	let accumulatedContent = '';
 	let allToolCalls: ToolCall[] = [];
 	let hasMoreToolCalls = true;
@@ -299,11 +298,11 @@ export async function sendMessage(
 	model: string,
 	options: StreamOptions
 ): Promise<void> {
+	let finalContent = '';
+	let finalToolCalls: ToolCall[] | undefined;
+
 	try {
 		const formattedMessages = formatMessages(options);
-
-		let finalContent: string;
-		let finalToolCalls: ToolCall[] | undefined;
 
 		if (options.toolsEnabled && !options.contextMessages && !options.toolResults) {
 			const result = await executeWithTools(model, options, formattedMessages);
@@ -323,7 +322,10 @@ export async function sendMessage(
 
 	} catch (error) {
 		console.error('[API] Error:', error);
-		await options.onError?.(error instanceof Error ? error : new Error(String(error)));
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		await options.onError?.(new Error(errorMessage));
+		// Still call onComplete with empty content to signal completion
+		await options.onComplete?.(finalContent, finalToolCalls);
 	}
 }
 

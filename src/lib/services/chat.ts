@@ -1,5 +1,4 @@
 import { db, type Session, type Message } from './db';
-import { getDefaultSystemPrompt, getSelectedPromptId } from './settings';
 
 export async function getSessions(): Promise<Session[]> {
 	return await db.sessions.orderBy('updatedAt').reverse().toArray();
