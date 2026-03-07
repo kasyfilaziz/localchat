@@ -4,10 +4,16 @@ import { getToolDefinitions, executeToolCalls, type ToolCall, type ToolCallResul
 
 export interface ChatMessage {
 	role: 'user' | 'assistant' | 'system' | 'tool';
-	content: string;
+	content: string | ToolResultContent[];
 	tool_call_id?: string;
 	tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
 	name?: string;
+}
+
+export interface ToolResultContent {
+	type: 'tool_result';
+	tool_use_id: string;
+	content: string;
 }
 
 export interface StreamOptions {
@@ -36,33 +42,42 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 	for (const msg of options.messages) {
 		if (msg.role === 'tool') {
 			formatted.push({
-				role: 'tool',
-				content: msg.content,
-				tool_call_id: msg.tool_call_id
+				role: 'user',
+				content: [
+					{
+						type: 'tool_result' as const,
+						tool_use_id: msg.tool_call_id || '',
+						content: msg.content
+					}
+				]
 			});
 		} else if (msg.role === 'assistant' && msg.tool_calls) {
 			try {
 				const tcs = JSON.parse(msg.tool_calls);
+				const contentValue = typeof msg.content === 'string' ? msg.content : '';
 				formatted.push({
 					role: 'assistant',
-					content: msg.content || '',
+					content: contentValue,
 					tool_calls: tcs
 				});
 			} catch {
+				const contentValue = typeof msg.content === 'string' ? msg.content : '';
 				formatted.push({
 					role: msg.role,
-					content: msg.content
+					content: contentValue
 				});
 			}
 		} else if (msg.role === 'assistant' && msg.content) {
+			const contentValue = typeof msg.content === 'string' ? msg.content : '';
 			formatted.push({
 				role: msg.role,
-				content: msg.content
+				content: contentValue
 			});
 		} else if (msg.role !== 'assistant') {
+			const contentValue = typeof msg.content === 'string' ? msg.content : '';
 			formatted.push({
 				role: msg.role,
-				content: msg.content
+				content: contentValue
 			});
 		}
 	}
@@ -74,9 +89,14 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 	if (options.toolResults) {
 		for (const tr of options.toolResults) {
 			formatted.push({
-				role: 'tool',
-				content: tr.output,
-				tool_call_id: tr.tool_call_id
+				role: 'user',
+				content: [
+					{
+						type: 'tool_result' as const,
+						tool_use_id: tr.tool_call_id,
+						content: tr.output
+					}
+				]
 			});
 		}
 	}
@@ -102,7 +122,10 @@ async function sendRequest(
 	const requestBody: Record<string, unknown> = {
 		model,
 		messages,
-		stream: true
+		stream: true,
+		extra_body: {
+			reasoning_split: true
+		}
 	};
 
 	if (toolsEnabled) {
@@ -266,7 +289,7 @@ async function executeWithTools(
 
 			const toolCallMessage: ChatMessage = {
 				role: 'assistant',
-				content: '',
+				content: result.content,
 				tool_calls: result.toolCalls.map(tc => ({
 					id: tc.id,
 					type: tc.type,
@@ -275,9 +298,14 @@ async function executeWithTools(
 			};
 
 			const toolResultMessages: ChatMessage[] = toolResults.map(tr => ({
-				role: 'tool' as const,
-				content: tr.output,
-				tool_call_id: tr.tool_call_id
+				role: 'user' as const,
+				content: [
+					{
+						type: 'tool_result' as const,
+						tool_use_id: tr.tool_call_id,
+						content: tr.output
+					}
+				]
 			}));
 
 			currentMessages = [
