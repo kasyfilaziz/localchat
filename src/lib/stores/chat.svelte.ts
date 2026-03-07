@@ -135,7 +135,7 @@ class ChatStore {
 
 		try {
 			await sendMessage(this.selectedModel, {
-				messages: this.messages.filter(m => m.role !== 'tool'),
+				messages: this.messages,
 				systemPrompt,
 				toolsEnabled: this.toolsEnabled,
 				onChunk: (chunk) => {
@@ -144,26 +144,50 @@ class ChatStore {
 				onToolCall: async (toolCalls) => {
 					this.pendingToolCalls = toolCalls;
 					const toolCallsStr = JSON.stringify(toolCalls);
-					await chat.updateMessage(assistantMessageId, '', toolCallsStr);
+					await chat.updateMessage(assistantMessageId, this.streamingContent, toolCallsStr);
+					
+					this.messages = this.messages.map(m => 
+						m.id === assistantMessageId 
+							? { ...m, content: this.streamingContent, tool_calls: toolCallsStr }
+							: m
+					);
 				},
 				onToolResult: async (results) => {
 					this.toolResults = results;
 					const toolResultsStr = JSON.stringify(results);
-					await chat.updateMessage(assistantMessageId, '', undefined, toolResultsStr);
+					await chat.updateMessage(
+						assistantMessageId, 
+						this.streamingContent, 
+						this.pendingToolCalls.length > 0 ? JSON.stringify(this.pendingToolCalls) : undefined, 
+						toolResultsStr
+					);
 					
 					this.messages = this.messages.map(m => 
 						m.id === assistantMessageId 
-							? { ...m, tool_calls: JSON.stringify(this.pendingToolCalls), tool_results: toolResultsStr }
+							? { ...m, content: this.streamingContent, tool_results: toolResultsStr }
 							: m
 					);
 				},
-				onComplete: async () => {
+				onComplete: async (finalContent: string, toolCalls?: ToolCall[]) => {
 					try {
-						const finalContent = this.streamingContent;
-						await chat.updateMessage(assistantMessageId, finalContent, this.pendingToolCalls.length > 0 ? JSON.stringify(this.pendingToolCalls) : undefined);
+						const toolCallsStr = toolCalls && toolCalls.length > 0 ? JSON.stringify(toolCalls) : undefined;
+						const toolResultsStr = this.toolResults.length > 0 ? JSON.stringify(this.toolResults) : undefined;
+						
+						await chat.updateMessage(
+							assistantMessageId, 
+							finalContent, 
+							toolCallsStr,
+							toolResultsStr
+						);
+						
 						this.messages = this.messages.map(m => 
 							m.id === assistantMessageId 
-								? { ...m, content: finalContent }
+								? { 
+									...m, 
+									content: finalContent,
+									tool_calls: toolCallsStr || m.tool_calls,
+									tool_results: toolResultsStr || m.tool_results
+								}
 								: m
 						);
 					} catch (err) {

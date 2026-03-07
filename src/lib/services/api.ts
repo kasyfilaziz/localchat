@@ -19,7 +19,7 @@ export interface StreamOptions {
 	onChunk: (text: string) => void;
 	onToolCall?: (toolCalls: ToolCall[]) => void | Promise<void>;
 	onToolResult?: (results: ToolCallResult[]) => void | Promise<void>;
-	onComplete?: () => void | Promise<void>;
+	onComplete?: (finalContent: string, toolCalls?: ToolCall[]) => void | Promise<void>;
 	onError?: (error: Error) => void | Promise<void>;
 }
 
@@ -34,15 +34,6 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 	}
 
 	for (const msg of options.messages) {
-		// If we have contextMessages, skip ONLY empty assistant messages (without tool_calls)
-		// Keep assistant messages that have tool_calls from previous response
-		if (options.contextMessages && msg.role === 'assistant') {
-			const hasToolCalls = msg.tool_calls && msg.tool_calls.trim().length > 0;
-			if (!hasToolCalls) {
-				continue; // Skip empty assistant message
-			}
-		}
-		
 		if (msg.role === 'tool') {
 			formatted.push({
 				role: 'tool',
@@ -54,7 +45,7 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 				const tcs = JSON.parse(msg.tool_calls);
 				formatted.push({
 					role: 'assistant',
-					content: '',
+					content: msg.content || '',
 					tool_calls: tcs
 				});
 			} catch {
@@ -63,7 +54,12 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 					content: msg.content
 				});
 			}
-		} else {
+		} else if (msg.role === 'assistant' && msg.content) {
+			formatted.push({
+				role: msg.role,
+				content: msg.content
+			});
+		} else if (msg.role !== 'assistant') {
 			formatted.push({
 				role: msg.role,
 				content: msg.content
@@ -92,10 +88,7 @@ async function sendRequest(
 	model: string,
 	messages: ChatMessage[],
 	toolsEnabled: boolean,
-	callbacks: {
-		onChunk: (text: string) => void;
-		onToolCall?: (toolCalls: ToolCall[]) => void;
-	}
+	onChunk: (text: string) => void
 ): Promise<{ content: string; toolCalls?: ToolCall[] }> {
 	const apiKey = await getApiKey();
 	const endpoint = await getApiEndpoint();
@@ -189,11 +182,11 @@ async function sendRequest(
 
 				if (deltaContent) {
 					content += deltaContent;
-					callbacks.onChunk(deltaContent);
+					onChunk(deltaContent);
 				}
 				if (reasoning) {
 					content += reasoning;
-					callbacks.onChunk(reasoning);
+					onChunk(reasoning);
 				}
 
 				if (delta?.tool_calls) {
@@ -237,51 +230,97 @@ async function sendRequest(
 	return { content, toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined };
 }
 
+async function executeWithTools(
+	model: string,
+	options: StreamOptions,
+	initialMessages: ChatMessage[]
+): Promise<{ content: string; toolCalls: ToolCall[] }> {
+	let currentMessages = [...initialMessages];
+	let accumulatedContent = '';
+	let allToolCalls: ToolCall[] = [];
+	let hasMoreToolCalls = true;
+	let toolCallIteration = 0;
+	const maxToolIterations = 5;
+
+	while (hasMoreToolCalls && toolCallIteration < maxToolIterations) {
+		console.log(`[API] Tool iteration ${toolCallIteration + 1}, messages: ${currentMessages.length}`);
+
+		const result = await sendRequest(
+			model,
+			currentMessages,
+			true,
+			(chunk) => {
+				accumulatedContent += chunk;
+				options.onChunk(chunk);
+			}
+		);
+
+		if (result.toolCalls && result.toolCalls.length > 0) {
+			console.log(`[API] Tool calls detected (iteration ${toolCallIteration + 1}):`, result.toolCalls);
+
+			allToolCalls = [...allToolCalls, ...result.toolCalls];
+			await options.onToolCall?.(result.toolCalls);
+
+			const toolResults = await executeToolCalls(result.toolCalls);
+			await options.onToolResult?.(toolResults);
+
+			const toolCallMessage: ChatMessage = {
+				role: 'assistant',
+				content: '',
+				tool_calls: result.toolCalls.map(tc => ({
+					id: tc.id,
+					type: tc.type,
+					function: tc.function
+				}))
+			};
+
+			const toolResultMessages: ChatMessage[] = toolResults.map(tr => ({
+				role: 'tool' as const,
+				content: tr.output,
+				tool_call_id: tr.tool_call_id
+			}));
+
+			currentMessages = [
+				...currentMessages,
+				toolCallMessage,
+				...toolResultMessages
+			];
+
+			toolCallIteration++;
+		} else {
+			hasMoreToolCalls = false;
+		}
+	}
+
+	return { content: accumulatedContent, toolCalls: allToolCalls };
+}
+
 export async function sendMessage(
 	model: string,
 	options: StreamOptions
 ): Promise<void> {
 	try {
-		const result = await sendRequest(
-			model,
-			formatMessages(options),
-			Boolean(options.toolsEnabled),
-			{
-				onChunk: options.onChunk,
-				onToolCall: options.onToolCall
-			}
-		);
+		const formattedMessages = formatMessages(options);
 
-		if (result.toolCalls && result.toolCalls.length > 0) {
-			await options.onToolCall?.(result.toolCalls);
-			
-			const toolResults = await executeToolCalls(result.toolCalls);
-			await options.onToolResult?.(toolResults);
+		let finalContent: string;
+		let finalToolCalls: ToolCall[] | undefined;
 
-			const contextMessages: ChatMessage[] = [
-				{
-					role: 'assistant',
-					content: '',
-					tool_calls: result.toolCalls.map(tc => ({
-						id: tc.id,
-						type: tc.type,
-						function: tc.function
-					}))
-				}
-			];
-
-			await sendMessage(model, {
-				...options,
-				toolsEnabled: false,
-				contextMessages,
-				toolResults,
-				onToolCall: undefined
-			});
-			
-			await options.onComplete?.();
+		if (options.toolsEnabled && !options.contextMessages && !options.toolResults) {
+			const result = await executeWithTools(model, options, formattedMessages);
+			finalContent = result.content;
+			finalToolCalls = result.toolCalls;
 		} else {
-			await options.onComplete?.();
+			const result = await sendRequest(
+				model,
+				formattedMessages,
+				Boolean(options.toolsEnabled),
+				options.onChunk
+			);
+			finalContent = result.content;
 		}
+
+		await options.onComplete?.(finalContent, finalToolCalls);
+
 	} catch (error) {
 		console.error('[API] Error:', error);
 		await options.onError?.(error instanceof Error ? error : new Error(String(error)));
@@ -309,12 +348,12 @@ export async function fetchModels(
 		const data = await response.json();
 
 		if (data.data && Array.isArray(data.data)) {
-			return data.data.map((m: any) => m.id).filter((id: string) => typeof id === 'string');
+			return data.data.map((m: unknown) => (m as { id: string }).id).filter((id: string) => typeof id === 'string');
 		}
 
 		if (data.models && Array.isArray(data.models)) {
 			return data.models
-				.map((m: any) => m.name || m.id)
+				.map((m: unknown) => (m as { name?: string; id: string }).name || (m as { id: string }).id)
 				.filter((id: string) => typeof id === 'string');
 		}
 

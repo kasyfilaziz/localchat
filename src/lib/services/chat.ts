@@ -84,17 +84,25 @@ export async function updateSessionTitle(sessionId: number, title: string): Prom
 
 export async function updateMessage(
 	id: number, 
-	content: string, 
+	content?: string, 
 	toolCalls?: string,
 	toolResults?: string
 ): Promise<void> {
-	const updates: Partial<Message> = { content };
+	const updates: Partial<Message> = {};
+	if (content !== undefined) {
+		updates.content = content;
+	}
 	if (toolCalls !== undefined) {
 		updates.tool_calls = toolCalls;
 	}
 	if (toolResults !== undefined) {
 		updates.tool_results = toolResults;
 	}
+	
+	if (Object.keys(updates).length === 0) {
+		return;
+	}
+	
 	await db.messages.update(id, updates);
 }
 
