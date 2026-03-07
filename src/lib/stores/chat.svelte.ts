@@ -155,8 +155,14 @@ class ChatStore {
 				}),
 				systemPrompt,
 				toolsEnabled: this.toolsEnabled,
-				onChunk: (chunk) => {
+				onChunk: async (chunk) => {
 					this.streamingContent += chunk;
+					await chat.updateMessage(assistantMessageId, this.streamingContent);
+					this.messages = this.messages.map(m => 
+						m.id === assistantMessageId 
+							? { ...m, content: this.streamingContent }
+							: m
+					);
 				},
 				onToolCall: async (toolCalls) => {
 					this.pendingToolCalls = toolCalls;

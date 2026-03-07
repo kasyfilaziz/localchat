@@ -93,7 +93,7 @@
 
 {#if sidebarOpen}
 	<div 
-		class="fixed inset-0 bg-black/50 z-40 transition-opacity"
+		class="fixed inset-0 bg-black/50 z-50 transition-opacity"
 		onclick={handleBackdropClick}
 		onkeydown={(e) => e.key === 'Escape' && handleBackdropClick()}
 		role="button"
@@ -103,7 +103,7 @@
 {/if}
 
 <aside 
-	class="fixed top-0 left-0 h-full w-72 bg-gray-900 text-white flex flex-col z-50 transform transition-transform duration-300 ease-in-out
+	class="fixed top-0 left-0 h-full w-72 bg-gray-900 text-white flex flex-col {sidebarOpen ? 'z-60' : 'z-50'} transform transition-transform duration-300 ease-in-out
 		{sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
 >
 	<!-- Header / Title -->
