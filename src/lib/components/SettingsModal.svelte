@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { getApiKey, getApiEndpoint, saveApiKey, saveApiEndpoint, saveDefaultModel, getDefaultModel, getApiMethod, saveApiMethod, type ApiMethod } from '$lib/services/settings';
-	import { testConnection, fetchModels } from '$lib/services/api';
+	import { testConnection, testConnectionWithCompletion, fetchModels } from '$lib/services/api';
 	import type { SystemPrompt } from '$lib/services/db';
 
 	interface Props {
@@ -18,7 +18,7 @@
 	let apiMethod = $state<ApiMethod>('custom');
 	let showApiKey = $state(false);
 	let isTesting = $state(false);
-	let testResult = $state<{ success: boolean; message: string; models?: string[] } | null>(null);
+	let testResult = $state<{ success: boolean; message: string; response?: string } | null>(null);
 
 	let promptName = $state('');
 	let promptContent = $state('');
@@ -58,24 +58,21 @@
 	}
 
 	async function handleTestConnection() {
-		if (!apiKey || !apiEndpoint) return;
+		if (!apiKey || !apiEndpoint || !modelName) return;
 		isTesting = true;
 		testResult = null;
 		
 		try {
-			testResult = await testConnection(apiEndpoint, apiKey);
-			if (testResult.success && testResult.models) {
-				chatStore.availableModels = testResult.models;
-			}
+			const result = await testConnectionWithCompletion(apiEndpoint, apiKey, modelName, 'hi what can you do?');
+			testResult = result;
 		} catch (e) {
-			// Silently fail - user can still use manual model input
 			testResult = {
-				success: true,
-				message: 'Connected but /models not available. Enter model name manually below.'
+				success: false,
+				message: e instanceof Error ? e.message : 'Connection failed'
 			};
 		}
 		
-		// Always save settings even if fetch fails
+		// Always save settings even if test fails
 		await saveApiKey(apiKey);
 		await saveApiEndpoint(apiEndpoint);
 		await saveDefaultModel(modelName);
@@ -256,9 +253,9 @@
 								<p class="{testResult.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} font-medium">
 									{testResult.message}
 								</p>
-								{#if testResult.models && testResult.models.length > 0}
-									<p class="text-sm text-green-600 dark:text-green-500 mt-1">
-										Models: {testResult.models.slice(0, 5).join(', ')}{testResult.models.length > 5 ? '...' : ''}
+								{#if testResult.response}
+									<p class="text-sm text-green-600 dark:text-green-500 mt-1 italic">
+										"{testResult.response.slice(0, 200)}{testResult.response.length > 200 ? '...' : ''}"
 									</p>
 								{/if}
 							</div>

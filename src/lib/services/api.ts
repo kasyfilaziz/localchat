@@ -424,3 +424,49 @@ export async function testConnection(
 		};
 	}
 }
+
+export async function testConnectionWithCompletion(
+	endpoint: string,
+	apiKey: string,
+	model: string,
+	prompt: string = 'hi what can you do?'
+): Promise<{ success: boolean; message: string; response?: string }> {
+	const url = endpoint.replace(/\/$/, '') + '/chat/completions';
+
+	try {
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${apiKey}`
+			},
+			body: JSON.stringify({
+				model,
+				messages: [{ role: 'user', content: prompt }],
+				stream: false
+			})
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			return {
+				success: false,
+				message: `API Error: ${response.status} - ${errorText}`
+			};
+		}
+
+		const data = await response.json();
+		const content = data.choices?.[0]?.message?.content || 'No response content';
+
+		return {
+			success: true,
+			message: 'Connection successful!',
+			response: content
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: error instanceof Error ? error.message : 'Connection failed'
+		};
+	}
+}

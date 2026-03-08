@@ -32,8 +32,8 @@
 </script>
 
 <div class="fixed bottom-6 left-4 right-4 z-50">
-	<div class="max-w-[800px] mx-auto">
-		<div class="flex gap-2 items-end rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2">
+	<div class="max-w-[600px] mx-auto">
+		<div class="flex gap-2 items-center rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2">
 			<div class="flex-1 relative">
 				<textarea
 					bind:this={textareaRef}
