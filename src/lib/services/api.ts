@@ -552,7 +552,8 @@ async function sendRequestAnthropic(
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
-			'Authorization': `Bearer ${apiKey}`
+			'x-api-key': apiKey,
+			'anthropic-version': '2023-06-01'
 		},
 		body: JSON.stringify(requestBody)
 	});
@@ -933,7 +934,8 @@ export async function testConnectionAnthropic(
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				'Authorization': `Bearer ${apiKey}`
+				'x-api-key': apiKey,
+				'anthropic-version': '2023-06-01'
 			},
 			body: JSON.stringify({
 				model,
