@@ -42,14 +42,9 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 	for (const msg of options.messages) {
 		if (msg.role === 'tool') {
 			formatted.push({
-				role: 'user',
-				content: [
-					{
-						type: 'tool_result' as const,
-						tool_use_id: msg.tool_call_id || '',
-						content: msg.content
-					}
-				]
+				role: 'tool',
+				tool_call_id: msg.tool_call_id || '',
+				content: msg.content
 			});
 		} else if (msg.role === 'assistant' && msg.tool_calls) {
 			try {
@@ -72,14 +67,9 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 				const toolResults = JSON.parse(msg.tool_results);
 				for (const tr of toolResults) {
 					formatted.push({
-						role: 'user',
-						content: [
-							{
-								type: 'tool_result' as const,
-								tool_use_id: tr.tool_call_id,
-								content: tr.output
-							}
-						]
+						role: 'tool' as const,
+						tool_call_id: tr.tool_call_id,
+						content: tr.output
 					});
 				}
 			} catch {
@@ -112,14 +102,9 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 	if (options.toolResults) {
 		for (const tr of options.toolResults) {
 			formatted.push({
-				role: 'user',
-				content: [
-					{
-						type: 'tool_result' as const,
-						tool_use_id: tr.tool_call_id,
-						content: tr.output
-					}
-				]
+				role: 'tool',
+				tool_call_id: tr.tool_call_id,
+				content: tr.output
 			});
 		}
 	}
@@ -321,14 +306,9 @@ async function executeWithTools(
 			};
 
 			const toolResultMessages: ChatMessage[] = toolResults.map(tr => ({
-				role: 'user' as const,
-				content: [
-					{
-						type: 'tool_result' as const,
-						tool_use_id: tr.tool_call_id,
-						content: tr.output
-					}
-				]
+				role: 'tool' as const,
+				tool_call_id: tr.tool_call_id,
+				content: tr.output
 			}));
 
 			currentMessages = [
