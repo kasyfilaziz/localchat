@@ -109,6 +109,8 @@ export async function setDefaultSystemPrompt(id: number): Promise<void> {
 
 export type ApiMethod = 'sdk' | 'custom';
 
+export type ApiMode = 'standard' | 'anthropic';
+
 export async function saveApiMethod(method: ApiMethod): Promise<void> {
 	await db.settings.put({
 		key: 'apiMethod',
@@ -119,4 +121,16 @@ export async function saveApiMethod(method: ApiMethod): Promise<void> {
 export async function getApiMethod(): Promise<ApiMethod> {
 	const record = await db.settings.get('apiMethod');
 	return (record?.value as ApiMethod) || 'custom';
+}
+
+export async function saveApiMode(mode: ApiMode): Promise<void> {
+	await db.settings.put({
+		key: 'apiMode',
+		value: mode
+	});
+}
+
+export async function getApiMode(): Promise<ApiMode> {
+	const record = await db.settings.get('apiMode');
+	return (record?.value as ApiMode) || 'standard';
 }
