@@ -67,6 +67,24 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 					content: contentValue
 				});
 			}
+		} else if (msg.role === 'assistant' && msg.tool_results) {
+			try {
+				const toolResults = JSON.parse(msg.tool_results);
+				for (const tr of toolResults) {
+					formatted.push({
+						role: 'user',
+						content: [
+							{
+								type: 'tool_result' as const,
+								tool_use_id: tr.tool_call_id,
+								content: tr.output
+							}
+						]
+					});
+				}
+			} catch {
+				// Ignore parse errors
+			}
 		} else if (msg.role === 'user' && Array.isArray(msg.content)) {
 			formatted.push({
 				role: msg.role,
