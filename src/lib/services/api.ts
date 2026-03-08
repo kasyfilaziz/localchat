@@ -548,15 +548,22 @@ async function sendRequestAnthropic(
 
 	console.log('[API] Sending Anthropic request:', { model, url, toolsEnabled, messageCount: messages.length });
 
-	const response = await fetch(url, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'x-api-key': apiKey,
-			'anthropic-version': '2023-06-01'
-		},
-		body: JSON.stringify(requestBody)
-	});
+	let response: Response;
+	try {
+		response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'x-api-key': apiKey,
+				'anthropic-version': '2023-06-01'
+			},
+			body: JSON.stringify(requestBody)
+		});
+	} catch (fetchError) {
+		const errorMsg = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
+		console.error('[API] Anthropic Fetch Error:', { error: errorMsg, url });
+		throw new Error(`Failed to fetch: ${errorMsg}. URL: ${url}`);
+	}
 
 	if (!response.ok) {
 		const errorText = await response.text();
@@ -806,7 +813,8 @@ export async function sendMessage(
 		await options.onComplete?.(finalContent, finalToolCalls);
 
 	} catch (error) {
-		console.error('[API] Error:', error);
+		const apiMode = await getApiMode();
+		console.error('[API] Error:', { error, apiMode, model });
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		await options.onError?.(new Error(errorMessage));
 		await options.onComplete?.(finalContent, finalToolCalls);
@@ -929,6 +937,8 @@ export async function testConnectionAnthropic(
 ): Promise<{ success: boolean; message: string; response?: string }> {
 	const url = endpoint.replace(/\/$/, '') + '/anthropic/v1/messages';
 
+	console.log('[API] Test Connection Anthropic:', { url, model });
+
 	try {
 		const response = await fetch(url, {
 			method: 'POST',
@@ -947,9 +957,10 @@ export async function testConnectionAnthropic(
 
 		if (!response.ok) {
 			const errorText = await response.text();
+			console.error('[API] Test Connection Error:', { status: response.status, body: errorText });
 			return {
 				success: false,
-				message: `API Error: ${response.status} - ${errorText}`
+				message: `HTTP ${response.status}: ${errorText}`
 			};
 		}
 
@@ -962,9 +973,11 @@ export async function testConnectionAnthropic(
 			response: content
 		};
 	} catch (error) {
+		const errorMsg = error instanceof Error ? error.message : 'Connection failed';
+		console.error('[API] Test Connection Failed:', { error: errorMsg, url });
 		return {
 			success: false,
-			message: error instanceof Error ? error.message : 'Connection failed'
+			message: `Failed to fetch: ${errorMsg}. URL: ${url}`
 		};
 	}
 }
