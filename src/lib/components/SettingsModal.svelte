@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { getApiKey, getApiEndpoint, saveApiKey, saveApiEndpoint, saveDefaultModel, getDefaultModel, getApiMethod, saveApiMethod, getApiMode, saveApiMode, type ApiMethod, type ApiMode } from '$lib/services/settings';
-	import { testConnection, testConnectionWithCompletion, fetchModels } from '$lib/services/api';
+	import { testConnection, testConnectionWithCompletion, testConnectionAnthropic, fetchModels } from '$lib/services/api';
 	import type { SystemPrompt } from '$lib/services/db';
 
 	interface Props {
@@ -67,7 +67,9 @@
 		testResult = null;
 		
 		try {
-			const result = await testConnectionWithCompletion(apiEndpoint, apiKey, modelName, 'hi what can you do?');
+			const result = apiMode === 'anthropic'
+				? await testConnectionAnthropic(apiEndpoint, apiKey, modelName, 'hi what can you do?')
+				: await testConnectionWithCompletion(apiEndpoint, apiKey, modelName, 'hi what can you do?');
 			testResult = result;
 		} catch (e) {
 			testResult = {

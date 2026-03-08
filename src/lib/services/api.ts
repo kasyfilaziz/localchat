@@ -473,6 +473,8 @@ async function executeWithTools(
 			}
 		);
 
+		accumulatedContent += result.content;
+
 		if (result.toolCalls && result.toolCalls.length > 0) {
 			console.log(`[API] Tool calls detected (iteration ${toolCallIteration + 1}):`, result.toolCalls);
 
@@ -702,6 +704,8 @@ async function executeWithToolsAnthropic(
 			}
 		);
 
+		accumulatedContent += result.content;
+
 		if (result.toolCalls && result.toolCalls.length > 0) {
 			console.log(`[API] Anthropic Tool calls detected (iteration ${toolCallIteration + 1}):`, result.toolCalls);
 
@@ -902,6 +906,53 @@ export async function testConnectionWithCompletion(
 
 		const data = await response.json();
 		const content = data.choices?.[0]?.message?.content || 'No response content';
+
+		return {
+			success: true,
+			message: 'Connection successful!',
+			response: content
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: error instanceof Error ? error.message : 'Connection failed'
+		};
+	}
+}
+
+export async function testConnectionAnthropic(
+	endpoint: string,
+	apiKey: string,
+	model: string,
+	prompt: string = 'hi what can you do?'
+): Promise<{ success: boolean; message: string; response?: string }> {
+	const url = endpoint.replace(/\/$/, '') + '/anthropic/v1/messages';
+
+	try {
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${apiKey}`
+			},
+			body: JSON.stringify({
+				model,
+				max_tokens: 1024,
+				messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+				stream: false
+			})
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			return {
+				success: false,
+				message: `API Error: ${response.status} - ${errorText}`
+			};
+		}
+
+		const data = await response.json();
+		const content = data.content?.[0]?.text || 'No response content';
 
 		return {
 			success: true,
