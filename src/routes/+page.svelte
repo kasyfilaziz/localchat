@@ -40,10 +40,12 @@
 <div class="h-screen flex flex-col bg-white dark:bg-gray-900 overflow-hidden">
 	{#if isInitialized}
 		<Sidebar {sidebarOpen} onClose={closeSidebar} onOpenSettings={openSettings} />
-		<div class="flex-1 flex flex-col min-h-0">
+		<div class="flex-1 flex flex-col min-h-0 w-full max-w-[800px] mx-auto">
 			<ChatHeader onOpenSidebar={openSidebar} chatTitle={chatStore.currentSession?.title} />
-			<MessageList />
-			<ChatInput />
+			<div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+				<MessageList />
+				<ChatInput />
+			</div>
 		</div>
 		<SettingsModal isOpen={settingsOpen} onClose={closeSettings} />
 	{:else}

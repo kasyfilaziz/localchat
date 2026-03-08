@@ -40,7 +40,7 @@
 </script>
 
 <div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4">
-	<div class="max-w-[85%] {message.role === 'user' ? 'text-right' : 'text-left'}">
+	<div class="{message.role === 'user' ? 'text-right' : 'text-left'}">
 		{#if message.role === 'assistant'}
 			<div class="markdown-content mb-1">
 				{@html renderMarkdown(message.content)}
