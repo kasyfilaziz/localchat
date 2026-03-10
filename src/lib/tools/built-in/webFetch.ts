@@ -42,13 +42,13 @@ async function fetchWithTimeout(url: string, timeout: number): Promise<Response>
   }
 }
 
-async function fetchContent(url: string, attempt: number = 1): Promise<ToolResult> {
+async function fetchContent(url: string, attempt: number = 1, useProxy: boolean = true): Promise<ToolResult> {
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'https://' + url;
   }
 
   let finalUrl = url;
-  if (!url.includes(CORS_PROXY)) {
+  if (useProxy && !url.includes(CORS_PROXY)) {
     finalUrl = CORS_PROXY + encodeURIComponent(url);
   }
 
@@ -56,6 +56,11 @@ async function fetchContent(url: string, attempt: number = 1): Promise<ToolResul
     const response = await fetchWithTimeout(finalUrl, TIMEOUT_MS);
     
     if (!response.ok) {
+      // If we get 403 and were using proxy, try again immediately without proxy
+      if (response.status === 403 && useProxy) {
+        console.warn(`[webFetch] 403 Forbidden with proxy, retrying without proxy for: ${url}`);
+        return fetchContent(url, attempt, false);
+      }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
@@ -91,9 +96,14 @@ async function fetchContent(url: string, attempt: number = 1): Promise<ToolResul
       result: content
     };
   } catch (err) {
+    // If it's a network error (like CORS block) and we were using proxy, 
+    // we already tried proxy first. If proxy failed with 403, we tried direct.
+    // If direct fails with CORS, it's a dead end for that attempt.
+    
     if (attempt < MAX_RETRIES) {
       await new Promise(r => setTimeout(r, 1000 * attempt));
-      return fetchContent(url, attempt + 1);
+      // Reset to using proxy for the next retry attempt
+      return fetchContent(url, attempt + 1, true);
     }
 
     return {
