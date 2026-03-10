@@ -56,52 +56,69 @@ function formatMessages(options: StreamOptions): ChatMessage[] {
 				tool_call_id: msg.tool_call_id || '',
 				content: msg.content
 			});
-		} else if (msg.role === 'assistant' && msg.tool_calls) {
-			try {
-				const tcs = JSON.parse(msg.tool_calls);
+		} else if (msg.role === 'assistant') {
+			let hasToolCalls = false;
+			if (msg.tool_calls) {
+				try {
+					const tcs = JSON.parse(msg.tool_calls);
+					formatted.push({
+						role: 'assistant',
+						content: '', // Tool call message typically has no content, or just thinking prefix
+						tool_calls: tcs
+					});
+					hasToolCalls = true;
+				} catch {
+					// Skip malformed tool calls
+				}
+			}
+
+			if (msg.tool_results) {
+				try {
+					const toolResults = JSON.parse(msg.tool_results);
+					for (const tr of toolResults) {
+						formatted.push({
+							role: 'tool' as const,
+							tool_call_id: tr.tool_call_id,
+							content: tr.output
+						});
+					}
+				} catch {
+					// Ignore parse errors
+				}
+			}
+
+			// If it has content and (it had tool calls OR it has no tool calls)
+			// Basically, if there's content, we want it as a message.
+			// If it followed tool results, it should be a separate assistant message.
+			if (msg.content) {
 				const contentValue = typeof msg.content === 'string' ? msg.content : '';
+				if (contentValue.trim()) {
+					formatted.push({
+						role: 'assistant',
+						content: contentValue
+					});
+				}
+			} else if (!hasToolCalls && !msg.tool_results) {
+				// Empty assistant message (should not happen normally)
 				formatted.push({
 					role: 'assistant',
-					content: contentValue,
-					tool_calls: tcs
+					content: ''
 				});
-			} catch {
-				const contentValue = typeof msg.content === 'string' ? msg.content : '';
+			}
+		} else {
+			// User or system messages
+			const contentValue = typeof msg.content === 'string' ? msg.content : '';
+			if (msg.role === 'user' && Array.isArray(msg.content)) {
 				formatted.push({
 					role: msg.role,
+					content: msg.content
+				});
+			} else {
+				formatted.push({
+					role: msg.role as 'user' | 'system',
 					content: contentValue
 				});
 			}
-		} else if (msg.role === 'assistant' && msg.tool_results) {
-			try {
-				const toolResults = JSON.parse(msg.tool_results);
-				for (const tr of toolResults) {
-					formatted.push({
-						role: 'tool' as const,
-						tool_call_id: tr.tool_call_id,
-						content: tr.output
-					});
-				}
-			} catch {
-				// Ignore parse errors
-			}
-		} else if (msg.role === 'user' && Array.isArray(msg.content)) {
-			formatted.push({
-				role: msg.role,
-				content: msg.content
-			});
-		} else if (msg.role === 'assistant' && msg.content) {
-			const contentValue = typeof msg.content === 'string' ? msg.content : '';
-			formatted.push({
-				role: msg.role,
-				content: contentValue
-			});
-		} else if (msg.role !== 'assistant') {
-			const contentValue = typeof msg.content === 'string' ? msg.content : '';
-			formatted.push({
-				role: msg.role,
-				content: contentValue
-			});
 		}
 	}
 
@@ -145,61 +162,62 @@ function formatMessagesForAnthropic(options: StreamOptions): {
 					}
 				]
 			});
-		} else if (msg.role === 'assistant' && msg.tool_calls) {
-			try {
-				const tcs = JSON.parse(msg.tool_calls);
-				const contentBlocks: AnthropicContentBlock[] = [];
-				
-				if (msg.content) {
-					const contentValue = typeof msg.content === 'string' ? msg.content : '';
-					if (contentValue) {
-						contentBlocks.push({ type: 'text', text: contentValue });
+		} else if (msg.role === 'assistant') {
+			let toolCallBlocks: AnthropicContentBlock[] = [];
+			if (msg.tool_calls) {
+				try {
+					const tcs = JSON.parse(msg.tool_calls);
+					for (const tc of tcs) {
+						let input: Record<string, unknown> = {};
+						try {
+							input = JSON.parse(tc.function.arguments || '{}');
+						} catch {}
+						toolCallBlocks.push({
+							type: 'tool_use',
+							id: tc.id,
+							name: tc.function.name,
+							input
+						});
 					}
-				}
-				
-				for (const tc of tcs) {
-					let input: Record<string, unknown> = {};
-					try {
-						input = JSON.parse(tc.function.arguments || '{}');
-					} catch {}
-					
-					contentBlocks.push({
-						type: 'tool_use',
-						id: tc.id,
-						name: tc.function.name,
-						input
-					});
-				}
-				
-				if (contentBlocks.length > 0) {
-					messages.push({
-						role: 'assistant',
-						content: contentBlocks
-					});
-				}
-			} catch {
-				// Skip malformed
+				} catch {}
 			}
-		} else if (msg.role === 'assistant' && msg.tool_results) {
-			try {
-				const toolResults = JSON.parse(msg.tool_results);
-				const contentBlocks: AnthropicContentBlock[] = [];
-				
-				for (const tr of toolResults) {
-					contentBlocks.push({
+
+			// Push tool calls as its own assistant message
+			if (toolCallBlocks.length > 0) {
+				messages.push({
+					role: 'assistant',
+					content: toolCallBlocks
+				});
+			}
+
+			// Push tool results as a user message
+			if (msg.tool_results) {
+				try {
+					const toolResults = JSON.parse(msg.tool_results);
+					const contentBlocks: AnthropicContentBlock[] = toolResults.map((tr: any) => ({
 						type: 'tool_result',
 						tool_use_id: tr.tool_call_id,
 						content: tr.output
-					});
-				}
-				
-				if (contentBlocks.length > 0) {
+					}));
+					if (contentBlocks.length > 0) {
+						messages.push({
+							role: 'user',
+							content: contentBlocks
+						});
+					}
+				} catch {}
+			}
+
+			// Push text content as another assistant message
+			if (msg.content) {
+				const contentValue = typeof msg.content === 'string' ? msg.content : '';
+				if (contentValue.trim()) {
 					messages.push({
-						role: 'user',
-						content: contentBlocks
+						role: 'assistant',
+						content: [{ type: 'text', text: contentValue }]
 					});
 				}
-			} catch {}
+			}
 		} else if (msg.role === 'user') {
 			if (Array.isArray(msg.content)) {
 				const contentBlocks: AnthropicContentBlock[] = [];
@@ -232,12 +250,6 @@ function formatMessagesForAnthropic(options: StreamOptions): {
 					content: [{ type: 'text', text: contentValue }]
 				});
 			}
-		} else if (msg.role === 'assistant' && msg.content) {
-			const contentValue = typeof msg.content === 'string' ? msg.content : '';
-			messages.push({
-				role: 'assistant',
-				content: [{ type: 'text', text: contentValue }]
-			});
 		}
 	}
 
