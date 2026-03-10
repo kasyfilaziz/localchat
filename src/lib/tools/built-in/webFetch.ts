@@ -1,5 +1,4 @@
-import type { Tool, ToolResult, OpenAIToolDefinition, ToolCallResult } from '../types';
-import { CORS_PROXY } from '../types';
+import type { Tool, ToolResult, OpenAIToolDefinition } from '../types';
 
 const definition: OpenAIToolDefinition = {
   type: 'function',
@@ -22,16 +21,34 @@ const definition: OpenAIToolDefinition = {
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 15000;
 
+const PROXIES = [
+  'https://corsproxy.io/?',
+  'https://api.allorigins.win/raw?url=',
+  'https://api.codetabs.com/v1/proxy?quest=',
+  'https://thingproxy.freeboard.io/fetch/'
+];
+
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0'
+];
+
 async function fetchWithTimeout(url: string, timeout: number): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
+  const randomUA = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
   try {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'Accept': 'text/html, application/xhtml+xml, */*',
-        'User-Agent': 'Mozilla/5.0 (compatible; LocalChat/1.0)'
+        'Accept': 'text/html, application/xhtml+xml, application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': randomUA,
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       }
     });
     clearTimeout(id);
@@ -42,24 +59,32 @@ async function fetchWithTimeout(url: string, timeout: number): Promise<Response>
   }
 }
 
-async function fetchContent(url: string, attempt: number = 1, useProxy: boolean = true): Promise<ToolResult> {
+async function fetchContent(
+  url: string, 
+  attempt: number = 1, 
+  proxyIndex: number = 0,
+  useProxy: boolean = true
+): Promise<ToolResult> {
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'https://' + url;
   }
 
   let finalUrl = url;
-  if (useProxy && !url.includes(CORS_PROXY)) {
-    finalUrl = CORS_PROXY + encodeURIComponent(url);
+  if (useProxy && proxyIndex < PROXIES.length) {
+    finalUrl = PROXIES[proxyIndex] + encodeURIComponent(url);
+  } else {
+    useProxy = false; // No more proxies to try
   }
 
   try {
+    console.log(`[webFetch] Attempt ${attempt}, Proxy: ${useProxy ? PROXIES[proxyIndex] : 'Direct'}, URL: ${url}`);
     const response = await fetchWithTimeout(finalUrl, TIMEOUT_MS);
     
     if (!response.ok) {
-      // If we get 403 and were using proxy, try again immediately without proxy
-      if (response.status === 403 && useProxy) {
-        console.warn(`[webFetch] 403 Forbidden with proxy, retrying without proxy for: ${url}`);
-        return fetchContent(url, attempt, false);
+      // If we get 403 or 429 and were using proxy, try next proxy immediately
+      if ((response.status === 403 || response.status === 429) && useProxy) {
+        console.warn(`[webFetch] HTTP ${response.status} with proxy ${PROXIES[proxyIndex]}, trying next proxy...`);
+        return fetchContent(url, attempt, proxyIndex + 1, true);
       }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -72,7 +97,7 @@ async function fetchContent(url: string, attempt: number = 1, useProxy: boolean 
       content = JSON.stringify(json, null, 2);
     } else {
       const text = await response.text();
-      content = text.slice(0, 15000);
+      content = text.slice(0, 20000); // Take more initial content for parsing
       
       const titleMatch = content.match(/<title[^>]*>([^<]+)<\/title>/i);
       const title = titleMatch ? titleMatch[1].trim() : 'No title';
@@ -83,10 +108,13 @@ async function fetchContent(url: string, attempt: number = 1, useProxy: boolean 
       bodyText = bodyText
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+        .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+        .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-        .slice(0, 8000);
+        .slice(0, 10000);
 
       content = `Title: ${title}\n\nContent:\n${bodyText}`;
     }
@@ -96,14 +124,16 @@ async function fetchContent(url: string, attempt: number = 1, useProxy: boolean 
       result: content
     };
   } catch (err) {
-    // If it's a network error (like CORS block) and we were using proxy, 
-    // we already tried proxy first. If proxy failed with 403, we tried direct.
-    // If direct fails with CORS, it's a dead end for that attempt.
-    
+    // If it's a proxy error, try next proxy
+    if (useProxy && proxyIndex < PROXIES.length - 1) {
+      return fetchContent(url, attempt, proxyIndex + 1, true);
+    }
+
+    // If it's a direct fetch error or last proxy failed, use standard retry loop
     if (attempt < MAX_RETRIES) {
+      console.log(`[webFetch] Attempt ${attempt} failed, retrying in ${attempt}s...`);
       await new Promise(r => setTimeout(r, 1000 * attempt));
-      // Reset to using proxy for the next retry attempt
-      return fetchContent(url, attempt + 1, true);
+      return fetchContent(url, attempt + 1, 0, true);
     }
 
     return {

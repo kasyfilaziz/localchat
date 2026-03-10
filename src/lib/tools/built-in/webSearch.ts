@@ -1,5 +1,5 @@
 import type { Tool, ToolResult, OpenAIToolDefinition } from '../types';
-import { CORS_PROXY, BRAVE_SEARCH_URL } from '../types';
+import { BRAVE_SEARCH_URL } from '../types';
 import { webFetchTool } from './webFetch';
 
 const definition: OpenAIToolDefinition = {
