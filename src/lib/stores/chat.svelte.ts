@@ -92,10 +92,13 @@ class ChatStore {
 		await settings.saveSelectedPromptId(promptId);
 	}
 
-	async updateSessionTitle(title: string) {
-		if (!this.currentSession || !title.trim()) return;
-		await chat.updateSessionTitle(this.currentSession.id!, title.trim());
-		this.currentSession.title = title.trim();
+	async updateSessionTitle(title: string, sessionId?: number) {
+		const id = sessionId || this.currentSession?.id;
+		if (!id || !title.trim()) return;
+		await chat.updateSessionTitle(id, title.trim());
+		if (this.currentSession?.id === id) {
+			this.currentSession.title = title.trim();
+		}
 		await this.loadSessions();
 	}
 
@@ -146,6 +149,28 @@ class ChatStore {
 			? this.systemPrompts.find(p => p.id === this.selectedPromptId)?.content
 			: this.systemPrompts.find(p => p.isDefault)?.content;
 
+		let lastSaveTime = Date.now();
+		let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+		const SAVE_INTERVAL = 500;
+
+		const throttleSave = async (content: string, toolCalls?: string, toolResults?: string) => {
+			const now = Date.now();
+			if (now - lastSaveTime > SAVE_INTERVAL) {
+				if (saveTimeout) {
+					clearTimeout(saveTimeout);
+					saveTimeout = null;
+				}
+				await chat.updateMessage(assistantMessageId, content, toolCalls, toolResults);
+				lastSaveTime = now;
+			} else if (!saveTimeout) {
+				saveTimeout = setTimeout(async () => {
+					await chat.updateMessage(assistantMessageId, content, toolCalls, toolResults);
+					lastSaveTime = Date.now();
+					saveTimeout = null;
+				}, SAVE_INTERVAL - (now - lastSaveTime));
+			}
+		};
+
 		try {
 			await sendMessage(this.selectedModel, {
 				messages: this.messages.filter(m => {
@@ -157,42 +182,68 @@ class ChatStore {
 				toolsEnabled: this.toolsEnabled,
 				onChunk: async (chunk) => {
 					this.streamingContent += chunk;
-					await chat.updateMessage(assistantMessageId, this.streamingContent);
+					
+					// Update UI immediately
 					this.messages = this.messages.map(m => 
 						m.id === assistantMessageId 
 							? { ...m, content: this.streamingContent }
 							: m
 					);
+
+					// Throttle DB write
+					throttleSave(this.streamingContent);
 				},
 				onToolCall: async (toolCalls) => {
 					this.pendingToolCalls = toolCalls;
 					const toolCallsStr = JSON.stringify(toolCalls);
-					await chat.updateMessage(assistantMessageId, this.streamingContent, toolCallsStr);
 					
+					// Update UI immediately
 					this.messages = this.messages.map(m => 
 						m.id === assistantMessageId 
 							? { ...m, content: this.streamingContent, tool_calls: toolCallsStr }
 							: m
 					);
+
+					// Force save on tool call
+					if (saveTimeout) {
+						clearTimeout(saveTimeout);
+						saveTimeout = null;
+					}
+					await chat.updateMessage(assistantMessageId, this.streamingContent, toolCallsStr);
+					lastSaveTime = Date.now();
 				},
 				onToolResult: async (results) => {
 					this.toolResults = results;
 					const toolResultsStr = JSON.stringify(results);
-					await chat.updateMessage(
-						assistantMessageId, 
-						this.streamingContent, 
-						this.pendingToolCalls.length > 0 ? JSON.stringify(this.pendingToolCalls) : undefined, 
-						toolResultsStr
-					);
+					const toolCallsStr = this.pendingToolCalls.length > 0 ? JSON.stringify(this.pendingToolCalls) : undefined;
 					
+					// Update UI immediately
 					this.messages = this.messages.map(m => 
 						m.id === assistantMessageId 
 							? { ...m, content: this.streamingContent, tool_results: toolResultsStr }
 							: m
 					);
+
+					// Force save on tool result
+					if (saveTimeout) {
+						clearTimeout(saveTimeout);
+						saveTimeout = null;
+					}
+					await chat.updateMessage(
+						assistantMessageId, 
+						this.streamingContent, 
+						toolCallsStr, 
+						toolResultsStr
+					);
+					lastSaveTime = Date.now();
 				},
 				onComplete: async (finalContent: string, toolCalls?: ToolCall[]) => {
 					try {
+						if (saveTimeout) {
+							clearTimeout(saveTimeout);
+							saveTimeout = null;
+						}
+
 						const toolCallsStr = toolCalls && toolCalls.length > 0 ? JSON.stringify(toolCalls) : undefined;
 						const toolResultsStr = this.toolResults.length > 0 ? JSON.stringify(this.toolResults) : undefined;
 						

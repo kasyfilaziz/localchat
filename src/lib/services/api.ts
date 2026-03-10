@@ -473,8 +473,6 @@ async function executeWithTools(
 			}
 		);
 
-		accumulatedContent += result.content;
-
 		if (result.toolCalls && result.toolCalls.length > 0) {
 			console.log(`[API] Tool calls detected (iteration ${toolCallIteration + 1}):`, result.toolCalls);
 
@@ -712,8 +710,6 @@ async function executeWithToolsAnthropic(
 			}
 		);
 
-		accumulatedContent += result.content;
-
 		if (result.toolCalls && result.toolCalls.length > 0) {
 			console.log(`[API] Anthropic Tool calls detected (iteration ${toolCallIteration + 1}):`, result.toolCalls);
 
@@ -823,16 +819,25 @@ export async function sendMessage(
 
 export async function fetchModels(
 	endpoint: string,
-	apiKey: string
+	apiKey: string,
+	apiMode: ApiMode = 'standard'
 ): Promise<string[]> {
 	const url = endpoint.replace(/\/$/, '') + '/models';
 
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json'
+	};
+
+	if (apiMode === 'anthropic') {
+		headers['x-api-key'] = apiKey;
+		headers['anthropic-version'] = '2023-06-01';
+	} else {
+		headers['Authorization'] = `Bearer ${apiKey}`;
+	}
+
 	try {
 		const response = await fetch(url, {
-			headers: {
-				'Authorization': `Bearer ${apiKey}`,
-				'Content-Type': 'application/json'
-			}
+			headers
 		});
 
 		if (!response.ok) {
@@ -859,10 +864,11 @@ export async function fetchModels(
 
 export async function testConnection(
 	endpoint: string,
-	apiKey: string
+	apiKey: string,
+	apiMode: ApiMode = 'standard'
 ): Promise<{ success: boolean; message: string; models?: string[] }> {
 	try {
-		const models = await fetchModels(endpoint, apiKey);
+		const models = await fetchModels(endpoint, apiKey, apiMode);
 		if (models.length === 0) {
 			return {
 				success: true,

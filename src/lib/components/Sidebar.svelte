@@ -2,7 +2,7 @@
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { themeStore } from '$lib/stores/theme.svelte';
 	import { fetchModels } from '$lib/services/api';
-	import { getApiKey, getApiEndpoint } from '$lib/services/settings';
+	import { getApiKey, getApiEndpoint, getApiMode } from '$lib/services/settings';
 
 	interface Props {
 		sidebarOpen?: boolean;
@@ -49,7 +49,7 @@
 		
 		const newTitle = prompt('Masukkan nama baru untuk chat:', session.title);
 		if (newTitle && newTitle.trim() && newTitle.trim() !== session.title) {
-			await chatStore.updateSessionTitle(newTitle.trim());
+			await chatStore.updateSessionTitle(newTitle.trim(), id);
 		}
 	}
 
@@ -74,8 +74,9 @@
 		try {
 			const apiKey = await getApiKey();
 			const endpoint = await getApiEndpoint();
+			const apiMode = await getApiMode();
 			if (apiKey) {
-				const models = await fetchModels(endpoint, apiKey);
+				const models = await fetchModels(endpoint, apiKey, apiMode);
 				chatStore.availableModels = models;
 			}
 		} catch (e) {
