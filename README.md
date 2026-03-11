@@ -116,11 +116,11 @@ localchat/
 - [ ] Pyodide integration for Python tools
 - [ ] MCP tool calling flow
 
-### Phase 4: Polish & Deploy 📋 PENDING
+### Phase 4: Polish & Deploy ✅ COMPLETED
 
-- [ ] Theme support (light/dark)
-- [ ] Export/import chat
-- [ ] GitHub Pages deployment
+- [x] Theme support (light/dark)
+- [x] Export/import chat
+- [x] GitHub Pages deployment
 
 ## 🔐 Security
 

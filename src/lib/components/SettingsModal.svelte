@@ -2,6 +2,7 @@
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { getApiKey, getApiEndpoint, saveApiKey, saveApiEndpoint, saveDefaultModel, getDefaultModel, getApiMethod, saveApiMethod, getApiMode, saveApiMode, type ApiMethod, type ApiMode } from '$lib/services/settings';
 	import { testConnection, testConnectionWithCompletion, testConnectionAnthropic, fetchModels } from '$lib/services/api';
+	import { exportAllChats, importChat, downloadExport, readImportFile, type ChatExport } from '$lib/services/exportImport';
 	import type { SystemPrompt } from '$lib/services/db';
 
 	interface Props {
@@ -11,7 +12,7 @@
 
 	let { isOpen, onClose }: Props = $props();
 
-	let activeTab = $state<'api' | 'prompts'>('api');
+	let activeTab = $state<'api' | 'prompts' | 'data'>('api');
 	let apiKey = $state('');
 	let apiEndpoint = $state('');
 	let modelName = $state('llama3');
@@ -24,6 +25,12 @@
 	let promptName = $state('');
 	let promptContent = $state('');
 	let editingPrompt = $state<SystemPrompt | null>(null);
+
+	let importFile = $state<File | null>(null);
+	let importStatus = $state<{ success: boolean; message: string } | null>(null);
+	let isImporting = $state(false);
+	let importOptions = $state({ merge: false, importPrompts: false });
+	let isExporting = $state(false);
 
 	$effect(() => {
 		if (isOpen) {
@@ -130,6 +137,64 @@
 		promptName = '';
 		promptContent = '';
 	}
+
+	async function handleExport() {
+		isExporting = true;
+		try {
+			const data = await exportAllChats();
+			downloadExport(data);
+			importStatus = { success: true, message: 'Chat exported successfully!' };
+		} catch (err) {
+			importStatus = { 
+				success: false, 
+				message: err instanceof Error ? err.message : 'Export failed' 
+			};
+		}
+		isExporting = false;
+	}
+
+	function handleFileSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		if (input.files && input.files[0]) {
+			importFile = input.files[0];
+			importStatus = null;
+		}
+	}
+
+	async function handleImport() {
+		if (!importFile) return;
+		
+		isImporting = true;
+		importStatus = null;
+		
+		try {
+			const data = await readImportFile(importFile);
+			const importedIds = await importChat(data, importOptions);
+			
+			if (importedIds.length > 0) {
+				await chatStore.loadSessions();
+				await chatStore.loadSystemPrompts();
+				importStatus = { 
+					success: true, 
+					message: `Successfully imported ${importedIds.length} session(s)!` 
+				};
+			} else {
+				importStatus = { 
+					success: false, 
+					message: 'No sessions were imported' 
+				};
+			}
+			
+			importFile = null;
+		} catch (err) {
+			importStatus = { 
+				success: false, 
+				message: err instanceof Error ? err.message : 'Import failed' 
+			};
+		}
+		
+		isImporting = false;
+	}
 </script>
 
 {#if isOpen}
@@ -165,6 +230,12 @@
 					class="flex-1 px-4 py-3 font-medium text-sm transition-colors {activeTab === 'prompts' ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}"
 				>
 					Prompts
+				</button>
+				<button
+					onclick={() => activeTab = 'data'}
+					class="flex-1 px-4 py-3 font-medium text-sm transition-colors {activeTab === 'data' ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}"
+				>
+					Data
 				</button>
 			</div>
 
@@ -383,6 +454,86 @@
 								</div>
 							{/if}
 						</div>
+					</div>
+
+				{:else if activeTab === 'data'}
+					<div class="space-y-6">
+						<div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+							<h3 class="font-medium text-gray-800 dark:text-gray-100 mb-3">Export Chat History</h3>
+							<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+								Download all your chat sessions, messages, and prompts as a JSON file.
+							</p>
+							<button
+								onclick={handleExport}
+								disabled={isExporting}
+								class="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+								</svg>
+								{isExporting ? 'Exporting...' : 'Export All Chats'}
+							</button>
+						</div>
+
+						<div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+							<h3 class="font-medium text-gray-800 dark:text-gray-100 mb-3">Import Chat History</h3>
+							<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+								Import chat sessions from a previously exported JSON file.
+							</p>
+							
+							<div class="space-y-3">
+								<div>
+									<label for="importFile" class="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+										Select File
+									</label>
+									<input
+										id="importFile"
+										type="file"
+										accept=".json"
+										onchange={handleFileSelect}
+										class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+
+								<div class="flex flex-col gap-2">
+									<label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+										<input
+											type="checkbox"
+											bind:checked={importOptions.merge}
+											class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+										/>
+										Merge with existing sessions (update if same title exists)
+									</label>
+									<label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+										<input
+											type="checkbox"
+											bind:checked={importOptions.importPrompts}
+											class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+										/>
+										Import system prompts (skip if already exists)
+									</label>
+								</div>
+
+								<button
+									onclick={handleImport}
+									disabled={!importFile || isImporting}
+									class="w-full py-2 px-4 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+									</svg>
+									{isImporting ? 'Importing...' : 'Import Chats'}
+								</button>
+							</div>
+						</div>
+
+						{#if importStatus}
+							<div class="p-3 rounded-lg {importStatus.success ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'}">
+								<p class="{importStatus.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'} text-sm font-medium">
+									{importStatus.message}
+								</p>
+							</div>
+						{/if}
 					</div>
 				{/if}
 			</div>

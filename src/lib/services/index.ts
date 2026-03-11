@@ -20,3 +20,4 @@ export {
 } from './settings';
 export { sendMessage, fetchModels, testConnection } from './api';
 export * from './chat';
+export * from './exportImport';
