@@ -43,23 +43,18 @@
 		const button = target.closest('.copy-code-btn') as HTMLButtonElement;
 		if (!button) return;
 
-		const code = button.dataset.code;
-		if (!code) return;
+		const wrapper = button.closest('.code-block-wrapper') as HTMLElement;
+		if (!wrapper) return;
 
-		const decodedCode = decodeHtmlEntities(code);
+		const codeElement = wrapper.querySelector('code');
+		const code = codeElement?.textContent || '';
 		
-		navigator.clipboard.writeText(decodedCode).then(() => {
+		navigator.clipboard.writeText(code).then(() => {
 			button.classList.add('copied');
 			setTimeout(() => {
 				button.classList.remove('copied');
 			}, 2000);
 		});
-	}
-
-	function decodeHtmlEntities(html: string): string {
-		const txt = document.createElement('textarea');
-		txt.innerHTML = html;
-		return txt.value;
 	}
 </script>
 
