@@ -37,12 +37,36 @@
 
 	const toolCalls = $derived(parseToolCalls());
 	const toolResults = $derived(parseToolResults());
+
+	function handleCopyCode(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+		const button = target.closest('.copy-code-btn') as HTMLButtonElement;
+		if (!button) return;
+
+		const code = button.dataset.code;
+		if (!code) return;
+
+		const decodedCode = decodeHtmlEntities(code);
+		
+		navigator.clipboard.writeText(decodedCode).then(() => {
+			button.classList.add('copied');
+			setTimeout(() => {
+				button.classList.remove('copied');
+			}, 2000);
+		});
+	}
+
+	function decodeHtmlEntities(html: string): string {
+		const txt = document.createElement('textarea');
+		txt.innerHTML = html;
+		return txt.value;
+	}
 </script>
 
 <div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4">
 	<div class="{message.role === 'user' ? 'text-right' : 'text-left'}">
 		{#if message.role === 'assistant'}
-			<div class="markdown-content mb-1">
+			<div class="markdown-content mb-1" onclick={handleCopyCode}>
 				{@html renderMarkdown(message.content)}
 			</div>
 

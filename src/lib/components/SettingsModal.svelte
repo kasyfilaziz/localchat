@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { chatStore } from '$lib/stores/chat.svelte';
-	import { getApiKey, getApiEndpoint, saveApiKey, saveApiEndpoint, saveDefaultModel, getDefaultModel, getApiMethod, saveApiMethod, getApiMode, saveApiMode, type ApiMethod, type ApiMode } from '$lib/services/settings';
-	import { testConnection, testConnectionWithCompletion, testConnectionAnthropic, fetchModels } from '$lib/services/api';
+	import { getApiKey, getApiEndpoint, saveApiKey, saveApiEndpoint, saveDefaultModel, getDefaultModel } from '$lib/services/settings';
+	import { testConnectionWithCompletion, fetchModels } from '$lib/services/api';
 	import { exportAllChats, importChat, downloadExport, readImportFile, type ChatExport } from '$lib/services/exportImport';
 	import type { SystemPrompt } from '$lib/services/db';
 
@@ -16,8 +16,6 @@
 	let apiKey = $state('');
 	let apiEndpoint = $state('');
 	let modelName = $state('llama3');
-	let apiMethod = $state<ApiMethod>('custom');
-	let apiMode = $state<ApiMode>('standard');
 	let showApiKey = $state(false);
 	let isTesting = $state(false);
 	let testResult = $state<{ success: boolean; message: string; response?: string } | null>(null);
@@ -42,13 +40,9 @@
 		const key = await getApiKey();
 		const endpoint = await getApiEndpoint();
 		const model = await getDefaultModel();
-		const method = await getApiMethod();
-		const mode = await getApiMode();
 		apiKey = key || '';
 		apiEndpoint = endpoint;
 		modelName = model;
-		apiMethod = method;
-		apiMode = mode;
 		await chatStore.loadSystemPrompts();
 	}
 
@@ -58,8 +52,6 @@
 		await saveApiKey(apiKey);
 		await saveApiEndpoint(apiEndpoint);
 		await saveDefaultModel(modelName);
-		await saveApiMethod(apiMethod);
-		await saveApiMode(apiMode);
 		chatStore.selectedModel = modelName;
 		
 		testResult = {
@@ -74,9 +66,7 @@
 		testResult = null;
 		
 		try {
-			const result = apiMode === 'anthropic'
-				? await testConnectionAnthropic(apiEndpoint, apiKey, modelName, 'hi what can you do?')
-				: await testConnectionWithCompletion(apiEndpoint, apiKey, modelName, 'hi what can you do?');
+			const result = await testConnectionWithCompletion(apiEndpoint, apiKey, modelName, 'hi what can you do?');
 			testResult = result;
 		} catch (e) {
 			testResult = {
@@ -85,12 +75,9 @@
 			};
 		}
 		
-		// Always save settings even if test fails
 		await saveApiKey(apiKey);
 		await saveApiEndpoint(apiEndpoint);
 		await saveDefaultModel(modelName);
-		await saveApiMethod(apiMethod);
-		await saveApiMode(apiMode);
 		chatStore.selectedModel = modelName;
 		isTesting = false;
 	}
@@ -294,32 +281,6 @@
 								class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 							/>
 							<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Enter model name (e.g., llama3, gpt-4o-mini, mistral)</p>
-						</div>
-
-						<div>
-							<label for="apiMethod" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Method</label>
-							<select
-								id="apiMethod"
-								bind:value={apiMethod}
-								class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-							>
-								<option value="custom">Custom Fetch (Recommended)</option>
-								<option value="sdk">Vercel AI SDK</option>
-							</select>
-							<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Custom Fetch is more compatible with various providers like MiniMax</p>
-						</div>
-
-						<div>
-							<label for="apiMode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Format</label>
-							<select
-								id="apiMode"
-								bind:value={apiMode}
-								class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-							>
-								<option value="standard">Standard (OpenAI-compatible)</option>
-								<option value="anthropic">Anthropic API</option>
-							</select>
-							<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Use Anthropic format for MiniMax M2.5, M2.1, M2 models</p>
 						</div>
 
 						<div class="flex gap-2">

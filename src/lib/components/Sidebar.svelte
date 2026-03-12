@@ -2,7 +2,7 @@
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { themeStore } from '$lib/stores/theme.svelte';
 	import { fetchModels } from '$lib/services/api';
-	import { getApiKey, getApiEndpoint, getApiMode } from '$lib/services/settings';
+	import { getApiKey, getApiEndpoint } from '$lib/services/settings';
 
 	interface Props {
 		sidebarOpen?: boolean;
@@ -74,9 +74,8 @@
 		try {
 			const apiKey = await getApiKey();
 			const endpoint = await getApiEndpoint();
-			const apiMode = await getApiMode();
 			if (apiKey) {
-				const models = await fetchModels(endpoint, apiKey, apiMode);
+				const models = await fetchModels(endpoint, apiKey);
 				chatStore.availableModels = models;
 			}
 		} catch (e) {

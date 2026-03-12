@@ -1,4 +1,4 @@
-import { getApiKey, getApiEndpoint, getApiMode, type ApiMode } from './settings';
+import { getApiKey, getApiEndpoint } from './settings';
 import type { Message } from './db';
 import { getToolDefinitions, executeToolCalls, type ToolCall, type ToolCallResult } from '../tools';
 
@@ -781,48 +781,26 @@ export async function sendMessage(
 	let finalToolCalls: ToolCall[] | undefined;
 
 	try {
-		const apiMode = await getApiMode();
+		const formattedMessages = formatMessages(options);
 
-		if (apiMode === 'anthropic') {
-			const formatted = formatMessagesForAnthropic(options);
-
-			if (options.toolsEnabled && !options.contextMessages && !options.toolResults) {
-				const result = await executeWithToolsAnthropic(model, options, formatted);
-				finalContent = result.content;
-				finalToolCalls = result.toolCalls;
-			} else {
-				const result = await sendRequestAnthropic(
-					model,
-					formatted.messages,
-					formatted.system,
-					Boolean(options.toolsEnabled),
-					options.onChunk
-				);
-				finalContent = result.content;
-			}
+		if (options.toolsEnabled && !options.contextMessages && !options.toolResults) {
+			const result = await executeWithTools(model, options, formattedMessages);
+			finalContent = result.content;
+			finalToolCalls = result.toolCalls;
 		} else {
-			const formattedMessages = formatMessages(options);
-
-			if (options.toolsEnabled && !options.contextMessages && !options.toolResults) {
-				const result = await executeWithTools(model, options, formattedMessages);
-				finalContent = result.content;
-				finalToolCalls = result.toolCalls;
-			} else {
-				const result = await sendRequest(
-					model,
-					formattedMessages,
-					Boolean(options.toolsEnabled),
-					options.onChunk
-				);
-				finalContent = result.content;
-			}
+			const result = await sendRequest(
+				model,
+				formattedMessages,
+				Boolean(options.toolsEnabled),
+				options.onChunk
+			);
+			finalContent = result.content;
 		}
 
 		await options.onComplete?.(finalContent, finalToolCalls);
 
 	} catch (error) {
-		const apiMode = await getApiMode();
-		console.error('[API] Error:', { error, apiMode, model });
+		console.error('[API] Error:', { error, model });
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		await options.onError?.(new Error(errorMessage));
 		await options.onComplete?.(finalContent, finalToolCalls);
@@ -831,21 +809,14 @@ export async function sendMessage(
 
 export async function fetchModels(
 	endpoint: string,
-	apiKey: string,
-	apiMode: ApiMode = 'standard'
+	apiKey: string
 ): Promise<string[]> {
 	const url = endpoint.replace(/\/$/, '') + '/models';
 
 	const headers: Record<string, string> = {
-		'Content-Type': 'application/json'
+		'Content-Type': 'application/json',
+		'Authorization': `Bearer ${apiKey}`
 	};
-
-	if (apiMode === 'anthropic') {
-		headers['x-api-key'] = apiKey;
-		headers['anthropic-version'] = '2023-06-01';
-	} else {
-		headers['Authorization'] = `Bearer ${apiKey}`;
-	}
 
 	try {
 		const response = await fetch(url, {
@@ -876,11 +847,10 @@ export async function fetchModels(
 
 export async function testConnection(
 	endpoint: string,
-	apiKey: string,
-	apiMode: ApiMode = 'standard'
+	apiKey: string
 ): Promise<{ success: boolean; message: string; models?: string[] }> {
 	try {
-		const models = await fetchModels(endpoint, apiKey, apiMode);
+		const models = await fetchModels(endpoint, apiKey);
 		if (models.length === 0) {
 			return {
 				success: true,
