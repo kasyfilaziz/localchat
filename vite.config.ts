@@ -10,6 +10,9 @@ export default defineConfig({
 		sveltekit(),
 		SvelteKitPWA({
 			registerType: 'autoUpdate',
+			devOptions: {
+				enabled: true
+			},
 			manifest: {
 				name: 'LocalChat',
 				short_name: 'LocalChat',
@@ -21,13 +24,13 @@ export default defineConfig({
 				scope: '/localchat/',
 				icons: [
 					{
-						src: 'icons/icon-192.png',
+						src: '/localchat/icons/icon-192.png',
 						sizes: '192x192',
 						type: 'image/png',
 						purpose: 'any maskable'
 					},
 					{
-						src: 'icons/icon-512.png',
+						src: '/localchat/icons/icon-512.png',
 						sizes: '512x512',
 						type: 'image/png',
 						purpose: 'any maskable'
@@ -35,7 +38,7 @@ export default defineConfig({
 				]
 			},
 			workbox: {
-				globPatterns: ['**/*.{js,css,html,svg,woff2ico,png,}']
+				globPatterns: ['**/*.{js,css,html,svg,woff2ico,png}']
 			}
 		})
 	]
