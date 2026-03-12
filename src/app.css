@@ -108,8 +108,8 @@ html, body {
 	border-radius: 0;
 	margin: 0;
 	padding: 0.75rem;
-	padding-top: 2rem;
-	padding-bottom: 2.5rem;
+	padding-top: 1.5rem;
+	padding-bottom: 3.5rem;
 	overflow-x: hidden;
 	white-space: pre-wrap;
 	word-wrap: break-word;
@@ -123,8 +123,8 @@ html, body {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 32px;
-	height: 32px;
+	width: 28px;
+	height: 28px;
 	padding: 0;
 	background: #374151;
 	border: none;
@@ -141,8 +141,8 @@ html, body {
 }
 
 .copy-code-btn .copy-icon {
-	width: 16px;
-	height: 16px;
+	width: 14px;
+	height: 14px;
 }
 
 .copy-code-btn.copied {
