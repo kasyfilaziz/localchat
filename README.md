@@ -7,12 +7,49 @@
 - **Local API Key Storage** - API keys are encrypted using Web Crypto API (AES-GCM) and stored in IndexedDB
 - **Local Chat History** - All conversations are stored locally in your browser using IndexedDB
 - **OpenAI-Compatible API** - Works with any OpenAI-compatible API (OpenAI, Ollama, LiteLLM, Anthropic via proxy, etc.)
-- **MCP Server in Browser** - Run Model Context Protocol tools directly in your browser using JavaScript or Python (via Pyodide/WASM)
+- **Built-in Tools** - Calculator and current time tool for AI-assisted tasks
+- **Mermaid Diagram Support** - Render Mermaid diagrams in chat with zoom and pan support
+- **Code Highlighting** - Syntax highlighting for code blocks with copy button
+- **Export/Import Chats** - Export chat history to JSON and import later
+- **Smart Auto-scroll** - Automatically scrolls to new messages with smart behavior
 - **PWA-Ready** - Installable as a native app, works offline for cached assets
 - **Privacy-First** - Your data never leaves your browser (except for API calls to your chosen provider)
 
 ## 🏗️ Architecture
 
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                      BROWSER (PWA)                                │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │                     SvelteKit (Static)                      │ │
+│  │                    (Build → HTML + JS)                      │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                              │                                    │
+│  ┌──────────────┐  ┌─────────┴────────┐  ┌──────────────────────┐ │
+│  │ Settings     │  │  Chat Manager   │  │  Tools Engine         │ │
+│  │ - API Key   │  │  - Messages    │  │  - Calculator        │ │
+│  │ - Endpoint  │  │  - Sessions     │  │  - Now               │ │
+│  │ - Model     │  │  - Streaming    │  │  - (Extensible)      │ │
+│  └──────┬───────┘  └────────┬────────┘  └──────────┬──────────┘ │
+│         │                   │                      │             │
+│         ▼                   ▼                      ▼             │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │              IndexedDB (via Dexie.js)                      │ │
+│  │  • encrypted_api_key (AES-GCM via Web Crypto API)          │ │
+│  │  • chat_sessions                                            │ │
+│  │  • system_prompts                                          │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                              │                                    │
+└──────────────────────────────┼────────────────────────────────────┘
+                               │
+                               ▼
+               ┌────────────────────────────────┐
+               │     OpenAI-Compatible API      │
+               │  (OpenAI, Ollama, LiteLLM,    │
+               │   Anthropic via proxy, etc)   │
+               └────────────────────────────────┘
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                      BROWSER (PWA)                                │
@@ -58,6 +95,9 @@
 | Storage | **Dexie.js** (IndexedDB) | 4.3.x |
 | PWA | **vite-plugin-pwa** | 1.2.x |
 | Encryption | **Web Crypto API** | Native |
+| Markdown | **marked** + **DOMPurify** | 17.x / 3.x |
+| Code Highlighting | **highlight.js** | 11.x |
+| Diagrams | **Mermaid** + **svg-pan-zoom** | 11.x / 3.x |
 
 ## 📂 Project Structure
 
@@ -65,16 +105,36 @@
 localchat/
 ├── src/
 │   ├── lib/
+│   │   ├── components/         # UI components
+│   │   │   ├── Sidebar.svelte
+│   │   │   ├── ChatHeader.svelte
+│   │   │   ├── ChatInput.svelte
+│   │   │   ├── MessageList.svelte
+│   │   │   ├── MessageBubble.svelte
+│   │   │   └── SettingsModal.svelte
 │   │   ├── services/
 │   │   │   ├── db.ts           # IndexedDB schema (Dexie.js)
 │   │   │   ├── crypto.ts       # AES-GCM encryption (Web Crypto API)
 │   │   │   ├── settings.ts     # API key/endpoint management
-│   │   │   └── index.ts        # Service exports
-│   │   └── assets/
-│   │       └── favicon.svg
+│   │   │   ├── chat.ts         # Chat operations
+│   │   │   ├── api.ts          # AI API integration
+│   │   │   ├── exportImport.ts # Export/import chat data
+│   │   │   └── index.ts         # Service exports
+│   │   ├── stores/
+│   │   │   ├── chat.svelte.ts  # Chat state management
+│   │   │   └── theme.svelte.ts # Theme state management
+│   │   ├── tools/
+│   │   │   ├── types.ts        # Tool type definitions
+│   │   │   ├── ToolRunner.ts   # Tool execution engine
+│   │   │   └── built-in/       # Built-in tools
+│   │   │       ├── calculator.ts
+│   │   │       └── now.ts
+│   │   └── utils/
+│   │       ├── markdown.ts     # Markdown rendering
+│   │       └── mermaid.ts      # Mermaid diagram rendering
 │   ├── routes/
 │   │   ├── +layout.js          # SPA config (prerender, ssr=false)
-│   │   ├── +layout.svelte      # Root layout
+│   │   ├── +layout.svelte       # Root layout
 │   │   └── +page.svelte        # Home page
 │   ├── app.css                 # TailwindCSS imports
 │   └── app.html                # HTML template
@@ -108,18 +168,18 @@ localchat/
 - [x] System prompts (multiple, CRUD)
 - [x] Model selection dropdown (fetch from API)
 - [x] Streaming response support
+- [x] Built-in tools (calculator, now)
+- [x] Tool calling flow
 
-### Phase 3: MCP Integration 📋 PENDING
+### Phase 3: Enhanced UI/UX ✅ COMPLETED
 
-- [ ] MCP client implementation
-- [ ] JavaScript-based tools (calculator, etc.)
-- [ ] Pyodide integration for Python tools
-- [ ] MCP tool calling flow
-
-### Phase 4: Polish & Deploy ✅ COMPLETED
-
+- [x] Markdown rendering with syntax highlighting
+- [x] Mermaid diagram support with zoom/pan
+- [x] Copy button for code blocks
+- [x] Export/import chat functionality
+- [x] Smart auto-scroll behavior
+- [x] Mobile responsive design with word wrap
 - [x] Theme support (light/dark)
-- [x] Export/import chat
 - [x] GitHub Pages deployment
 
 ## 🔐 Security
@@ -164,5 +224,5 @@ MIT
 - [Dexie.js](https://dexie.org/) - IndexedDB made easy
 - [TailwindCSS](https://tailwindcss.com/) - A utility-first CSS framework
 - [vite-plugin-pwa](https://vite-pwa.netlify.app/) - Zero-config PWA for Vite
-- [Pyodide](https://pyodide.org/) - Python in the browser
-- [MCP](https://modelcontextprotocol.io/) - Model Context Protocol
+- [Mermaid](https://mermaid.js.org/) - Diagram as code
+- [highlight.js](https://highlightjs.org/) - Syntax highlighting

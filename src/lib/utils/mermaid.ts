@@ -85,7 +85,10 @@ export function enablePanZoom(svgElement: SVGSVGElement, diagramId: string): voi
         zoomScaleSensitivity: 0.5,
         mouseWheelZoomEnabled: true,
         panEnabled: true,
-        preventMouseEventsDefault: true
+        preventMouseEventsDefault: true,
+        touchZoomEnabled: true,
+        touchPanEnabled: true,
+        dblClickZoomEnabled: true
     });
 
     panZoomInstances.set(diagramId, instance);

@@ -4,6 +4,34 @@ Document ini menjelaskan alur lengkap saat user mengirim pesan di LocalChat.
 
 ---
 
+## Fitur yang Didukung
+
+### 1. Chat dengan AI
+- Streaming response dari OpenAI-compatible API
+- Multiple system prompts (CRUD)
+- Model selection
+- Tool calling (calculator, now)
+
+### 2. Markdown Rendering
+- Code blocks dengan syntax highlighting
+- Tables, lists, blockquotes
+- Links dan formatted text
+
+### 3. Mermaid Diagrams
+- Render diagram dari code blocks
+- Zoom dan pan support
+- Support flowchart, sequence, class, etc.
+
+### 4. Copy Button
+- Copy kode dari code blocks
+- Full text dari element code
+
+### 5. Export/Import
+- Export chat ke JSON
+- Import chat dari JSON
+
+---
+
 ## Sequence Diagram (Mermaid Format)
 
 ```mermaid
@@ -53,7 +81,7 @@ sequenceDiagram
             API->>API: Parse JSON, extract content/tool_calls
             API->>ChatStore: options.onChunk(chunk)
             
-            Note over ChatStore: 6c. Save to DB on Every Chunk
+            Note over ChatStore: 6c. Save to DB on Every Chunk (throttled)
             ChatStore->>Database: chat.updateMessage(id, streamingContent)
             ChatStore->>ChatStore: Update streamingContent state
             
@@ -226,14 +254,16 @@ updateMessage(id, content?, toolCalls?, toolResults?)
 
 | # | Lokasi | Cara Debug |
 |---|--------|-----------|
-| 1 | `ChatInput.svelte:7` | console.log di handleSubmit |
-| 2 | `chat.svelte.ts:158` | console.log di onChunk |
-| 3 | `chat.svelte.ts:162` | console.log di onToolCall |
-| 4 | `chat.svelte.ts:170` | console.log di onToolResult |
-| 5 | `chat.svelte.ts:186` | console.log di onComplete |
-| 6 | `api.ts:135` | console.log request body sebelum fetch |
-| 7 | `api.ts:203-213` | console.log parsed chunk |
-| 8 | Database | Buka DevTools → Application → IndexedDB → LocalChatDB |
+| 1 | `ChatInput.svelte` | handleSubmit - console.log di handleSubmit |
+| 2 | `chat.svelte.ts` | onChunk callback - console.log streaming content |
+| 3 | `chat.svelte.ts` | onToolCall callback - console.log tool calls |
+| 4 | `chat.svelte.ts` | onToolResult callback - console.log tool results |
+| 5 | `chat.svelte.ts` | onComplete callback - console.log final content |
+| 6 | `api.ts` | console.log request body sebelum fetch |
+| 7 | `api.ts` | console.log parsed chunk |
+| 8 | `markdown.ts` | Render markdown - check output HTML |
+| 9 | `mermaid.ts` | Render mermaid - check SVG output |
+| 10 | Database | Buka DevTools → Application → IndexedDB → LocalChatDB |
 
 ---
 
@@ -241,9 +271,10 @@ updateMessage(id, content?, toolCalls?, toolResults?)
 
 Di kode sudah ada logging:
 
-- `[API] Sending request: {...}` - Line api.ts:135
-- `[API] Tool iteration X` - Line api.ts:266
-- `[API] Tool calls detected` - Line api.ts:279
+- `[API] Sending request: {...}` - Di api.ts saat mengirim request
+- `[API] Tool iteration X` - Saat tool execution loop
+- `[API] Tool calls detected` - Saat tool call terdeteksi
+- `[Mermaid]` - Di mermaid.ts saat render diagram
 
 Anda bisa menambah lebih banyak console.log sesuai kebutuhan debug!
 
@@ -276,11 +307,11 @@ Buka DevTools → Console, lalu kirim pesan. Anda akan melihat:
 
 ## Catatan Penting
 
-### Penyimpanan ke Database
+### Penyimpanannya ke Database
 
 | Stage | Action |
 |-------|--------|
-| onChunk | Save ke DB setiap menerima chunk |
+| onChunk | Save ke DB setiap menerima chunk (throttled 500ms) |
 | onToolCall | Save tool_calls ke DB |
 | onToolResult | Save tool_results ke DB |
 | onComplete | Save final content |
@@ -289,7 +320,7 @@ Buka DevTools → Console, lalu kirim pesan. Anda akan melihat:
 
 1. User mengirim pesan
 2. LLM thinking dan mungkin melakukan tool call
-3. Tool dieksekusi
+3. Tool dieksekusi (calculator, now)
 4. Tool results dikirim kembali ke LLM
 5. LLM memberikan response final
 
@@ -297,3 +328,10 @@ Jika error terjadi di step 2-4, lihat:
 - `api.ts` - format messages dan request
 - `executeWithTools()` - loop eksekusi tools
 - `ToolRunner.ts` - eksekusi tool individual
+
+### Export/Import Flow
+
+1. **Export**: Ambil semua session dari IndexedDB → format JSON → download file
+2. **Import**: Baca file JSON → parse sessions & messages → insert ke IndexedDB
+
+Lihat: `exportImport.ts`
