@@ -3,9 +3,23 @@
 	import MessageBubble from './MessageBubble.svelte';
 
 	let messagesContainer: HTMLDivElement;
+	let shouldAutoScroll = $state(true);
+	let previousMessageCount = $state(0);
+
+	function handleScroll() {
+		if (!messagesContainer) return;
+		const scrollBottom = messagesContainer.scrollTop + messagesContainer.clientHeight;
+		const isAtBottom = scrollBottom >= messagesContainer.scrollHeight - 50;
+		shouldAutoScroll = isAtBottom;
+	}
 
 	$effect(() => {
-		if (chatStore.messages.length || chatStore.streamingContent) {
+		const currentCount = chatStore.messages.length;
+		const newMessageAdded = currentCount > previousMessageCount;
+		previousMessageCount = currentCount;
+
+		// Always scroll if: new message added OR user is at bottom
+		if (newMessageAdded || shouldAutoScroll) {
 			setTimeout(() => {
 				if (messagesContainer) {
 					messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -15,7 +29,7 @@
 	});
 </script>
 
-<div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 pb-40 bg-white dark:bg-gray-900">
+<div bind:this={messagesContainer} onscroll={handleScroll} class="flex-1 overflow-y-auto p-4 pb-40 bg-white dark:bg-gray-900">
 	{#if !chatStore.currentSession}
 		<div class="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">
 			<div class="text-center px-4">
