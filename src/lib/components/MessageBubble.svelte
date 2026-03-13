@@ -2,13 +2,19 @@
 	import type { Message } from '$lib/services/db';
 	import { renderMarkdown } from '$lib/utils/markdown';
 	import type { ToolCall, ToolCallResult } from '$lib/tools';
+	import { chatStore } from '$lib/stores/chat.svelte';
 
 	interface Props {
 		message: Message;
-		isStreaming?: boolean;
 	}
 
-	let { message, isStreaming = false }: Props = $props();
+	let { message }: Props = $props();
+
+	// Check if this message is currently streaming
+	const isStreaming = $derived(
+		chatStore.isLoading && 
+		chatStore.streamingMessageId === message.id
+	);
 
 	let toolCallsExpanded = $state(false);
 	let toolResultsExpanded = $state(true);

@@ -10,6 +10,7 @@ class ChatStore {
 	messages = $state<Message[]>([]);
 	isLoading = $state(false);
 	streamingContent = $state('');
+	streamingMessageId = $state<number | null>(null);
 	error = $state<string | null>(null);
 	pendingToolCalls = $state<ToolCall[]>([]);
 	toolResults = $state<ToolCallResult[]>([]);
@@ -144,6 +145,7 @@ class ChatStore {
 			timestamp: new Date()
 		};
 		this.messages = [...this.messages, assistantMessage];
+		this.streamingMessageId = assistantMessageId;
 
 		const systemPrompt = this.selectedPromptId
 			? this.systemPrompts.find(p => p.id === this.selectedPromptId)?.content
@@ -270,11 +272,11 @@ class ChatStore {
 					} finally {
 						this.isLoading = false;
 						this.streamingContent = '';
+						this.streamingMessageId = null;
 					}
 				},
 				onError: async (err) => {
 					this.error = err.message;
-					// Update assistant message with error info
 					await chat.updateMessage(assistantMessageId, `Error: ${err.message}`);
 					this.messages = this.messages.map(m => 
 						m.id === assistantMessageId 
@@ -283,12 +285,14 @@ class ChatStore {
 					);
 					this.isLoading = false;
 					this.streamingContent = '';
+					this.streamingMessageId = null;
 				}
 			});
 		} catch (err) {
 			this.error = err instanceof Error ? err.message : 'Failed to send message';
 			this.isLoading = false;
 			this.streamingContent = '';
+			this.streamingMessageId = null;
 		}
 	}
 

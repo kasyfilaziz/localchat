@@ -108,8 +108,8 @@ html, body {
 	border-radius: 0;
 	margin: 0;
 	padding: 0.75rem;
-	padding-top: 1.5rem;
-	padding-bottom: 3.5rem;
+	padding-top: 2.5rem;
+	padding-bottom: 0.75rem;
 	overflow-x: hidden;
 	white-space: pre-wrap;
 	word-wrap: break-word;
@@ -117,9 +117,10 @@ html, body {
 
 .copy-code-btn {
 	position: absolute;
-	left: 8px;
-	bottom: 8px;
-	top: auto;
+	right: 8px;
+	top: 8px;
+	bottom: auto;
+	left: auto;
 	display: flex;
 	align-items: center;
 	justify-content: center;
