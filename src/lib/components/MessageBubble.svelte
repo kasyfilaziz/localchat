@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Message } from '$lib/services/db';
 	import { renderMarkdown } from '$lib/utils/markdown';
-	import { initMermaid, renderMermaid } from '$lib/utils/mermaid';
+	import { initMermaid, renderMermaid, enablePanZoom } from '$lib/utils/mermaid';
 	import type { ToolCall, ToolCallResult } from '$lib/tools';
 	import { chatStore } from '$lib/stores/chat.svelte';
 
@@ -48,6 +48,13 @@
 				const svg = await renderMermaid(code, id);
 				if (svg) {
 					div.innerHTML = svg;
+					
+					// Enable pan-zoom on the SVG
+					const svgElement = div.querySelector('svg');
+					if (svgElement) {
+						svgElement.id = id;
+						enablePanZoom(svgElement, id);
+					}
 				}
 			} catch (error) {
 				console.warn('Mermaid render failed, keeping raw output:', error);

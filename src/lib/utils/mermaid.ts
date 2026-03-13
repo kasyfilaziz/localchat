@@ -1,6 +1,8 @@
 import mermaid from 'mermaid';
+import svgPanZoom from 'svg-pan-zoom';
 
 let initialized = false;
+const panZoomInstances = new Map<string, ReturnType<typeof svgPanZoom>>();
 
 export async function initMermaid(): Promise<void> {
     if (initialized) return;
@@ -66,4 +68,32 @@ function escapeHtml(text: string): string {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+export function enablePanZoom(svgElement: SVGSVGElement, diagramId: string): void {
+    if (panZoomInstances.has(diagramId)) {
+        panZoomInstances.get(diagramId)?.destroy();
+    }
+
+    const instance = svgPanZoom(svgElement, {
+        zoomEnabled: true,
+        controlIconsEnabled: true,
+        fit: true,
+        center: true,
+        minZoom: 0.1,
+        maxZoom: 10,
+        zoomScaleSensitivity: 0.5,
+        mouseWheelZoomEnabled: true,
+        panEnabled: true,
+        preventMouseEventsDefault: true
+    });
+
+    panZoomInstances.set(diagramId, instance);
+}
+
+export function disablePanZoom(diagramId: string): void {
+    if (panZoomInstances.has(diagramId)) {
+        panZoomInstances.get(diagramId)?.destroy();
+        panZoomInstances.delete(diagramId);
+    }
 }

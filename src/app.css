@@ -420,8 +420,9 @@ html, body {
 .mermaid-diagram {
 	margin: 1rem 0;
 	text-align: center;
-	overflow-x: auto;
+	overflow: auto;
 	-webkit-overflow-scrolling: touch;
+	position: relative;
 }
 
 .mermaid-diagram svg {
@@ -444,4 +445,42 @@ html, body {
 	font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
 	font-size: 0.8rem;
 	color: #e5e7eb;
+}
+
+.svg-pan-zoom-control {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 10;
+	display: flex;
+	gap: 4px;
+}
+
+.svg-pan-zoom-control button {
+	background: #374151;
+	border: none;
+	border-radius: 4px;
+	color: #e5e7eb;
+	cursor: pointer;
+	padding: 4px 8px;
+	font-size: 14px;
+	line-height: 1;
+	width: 28px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background 0.2s;
+}
+
+.svg-pan-zoom-control button:hover {
+	background: #4b5563;
+}
+
+.dark .svg-pan-zoom-control button {
+	background: #4b5563;
+}
+
+.dark .svg-pan-zoom-control button:hover {
+	background: #6b7280;
 }
