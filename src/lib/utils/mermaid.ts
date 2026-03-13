@@ -1,5 +1,6 @@
 import mermaid from 'mermaid';
 import svgPanZoom from 'svg-pan-zoom';
+import Hammer from 'hammerjs';
 
 let initialized = false;
 const panZoomInstances = new Map<string, ReturnType<typeof svgPanZoom>>();
@@ -75,23 +76,87 @@ export function enablePanZoom(svgElement: SVGSVGElement, diagramId: string): voi
         panZoomInstances.get(diagramId)?.destroy();
     }
 
-    const instance = svgPanZoom(svgElement, {
-        zoomEnabled: true,
-        controlIconsEnabled: true,
-        fit: true,
-        center: true,
-        minZoom: 0.1,
-        maxZoom: 10,
-        zoomScaleSensitivity: 0.5,
-        mouseWheelZoomEnabled: true,
-        panEnabled: true,
-        preventMouseEventsDefault: true,
-        touchZoomEnabled: true,
-        touchPanEnabled: true,
-        dblClickZoomEnabled: true
-    });
+    try {
+        const instance = svgPanZoom(svgElement, {
+            zoomEnabled: true,
+            controlIconsEnabled: true,
+            fit: true,
+            center: true,
+            minZoom: 0.1,
+            maxZoom: 10,
+            zoomScaleSensitivity: 0.5,
+            mouseWheelZoomEnabled: true,
+            panEnabled: true,
+            preventMouseEventsDefault: true,
+            touchZoomEnabled: true,
+            touchPanEnabled: true,
+            dblClickZoomEnabled: true,
+            customEventsHandler: {
+                haltEventListeners: ['touchstart', 'touchend', 'touchmove', 'touchleave', 'touchcancel'],
+                init: function(options) {
+                    const instance = options.instance;
+                    let initialScale = 1;
+                    let pannedX = 0;
+                    let pannedY = 0;
 
-    panZoomInstances.set(diagramId, instance);
+                    // Support both pointer events and touch events
+                    const mc = new Hammer(options.svgElement, {
+                        inputClass: Hammer.SUPPORT_POINTER_EVENTS ? Hammer.PointerEventInput : Hammer.TouchInput
+                    });
+
+                    this.hammer = mc;
+
+                    mc.get('pinch').set({enable: true});
+
+                    mc.on('doubletap', () => {
+                        instance.zoomIn();
+                    });
+
+                    mc.on('panstart panmove', (ev) => {
+                        if (ev.type === 'panstart') {
+                            pannedX = 0;
+                            pannedY = 0;
+                        }
+                        instance.panBy({x: ev.deltaX - pannedX, y: ev.deltaY - pannedY});
+                        pannedX = ev.deltaX;
+                        pannedY = ev.deltaY;
+                    });
+
+                    mc.on('pinchstart pinchmove', (ev) => {
+                        if (ev.type === 'pinchstart') {
+                            initialScale = instance.getZoom();
+                            instance.zoomAtPoint(initialScale * ev.scale, {x: ev.center.x, y: ev.center.y});
+                        }
+                        instance.zoomAtPoint(initialScale * ev.scale, {x: ev.center.x, y: ev.center.y});
+                    });
+
+                    // Prevent scrolling the page when interacting with the diagram
+                    options.svgElement.addEventListener('touchmove', (e) => { 
+                        if (e.touches.length > 1) {
+                            e.preventDefault(); 
+                        }
+                    }, { passive: false });
+                },
+                destroy: function() {
+                    if (this.hammer) {
+                        this.hammer.destroy();
+                    }
+                }
+            }
+        });
+
+        panZoomInstances.set(diagramId, instance);
+        
+        // Force a resize/fit after a small delay to ensure it matches the container
+        setTimeout(() => {
+            instance.resize();
+            instance.fit();
+            instance.center();
+        }, 100);
+
+    } catch (err) {
+        console.error('Error enabling pan-zoom:', err);
+    }
 }
 
 export function disablePanZoom(diagramId: string): void {
