@@ -42,6 +42,3 @@ export interface OpenAIToolDefinition {
     parameters: ToolParameter;
   };
 }
-
-export const CORS_PROXY = 'https://corsproxy.io/?';
-export const BRAVE_SEARCH_URL = 'https://search.brave.com/search?q=';

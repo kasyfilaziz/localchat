@@ -1,14 +1,10 @@
 import type { Tool, ToolCall, ToolCallResult, ToolResult } from './types';
 import { nowTool } from './built-in/now';
 import { calculatorTool } from './built-in/calculator';
-import { webFetchTool } from './built-in/webFetch';
-import { webSearchTool } from './built-in/webSearch';
 
 const toolRegistry: Record<string, Tool> = {
   now: nowTool,
-  calculator: calculatorTool,
-  webFetch: webFetchTool,
-  webSearch: webSearchTool
+  calculator: calculatorTool
 };
 
 export function registerTool(tool: Tool): void {
