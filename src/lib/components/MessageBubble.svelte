@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Message } from '$lib/services/db';
 	import { renderMarkdown } from '$lib/utils/markdown';
+	import { initMermaid, renderMermaid } from '$lib/utils/mermaid';
 	import type { ToolCall, ToolCallResult } from '$lib/tools';
 	import { chatStore } from '$lib/stores/chat.svelte';
 
@@ -15,6 +16,44 @@
 		chatStore.isLoading && 
 		chatStore.streamingMessageId === message.id
 	);
+
+	let mermaidRendered = $state(false);
+
+	// Only render mermaid when streaming is finished
+	$effect(() => {
+		// Initialize mermaid early
+		initMermaid();
+
+		// Only process when streaming is finished
+		if (!isStreaming && message.content && !mermaidRendered) {
+			mermaidRendered = true;
+			setTimeout(() => {
+				renderMermaidDiagrams();
+			}, 0);
+		}
+	});
+
+	async function renderMermaidDiagrams() {
+		const container = document.querySelector(`[data-message-id="${message.id}"] .markdown-content`);
+		if (!container) return;
+
+		const mermaidDivs = container.querySelectorAll('.mermaid-diagram');
+		if (!mermaidDivs || mermaidDivs.length === 0) return;
+
+		for (const div of mermaidDivs) {
+			const code = decodeURIComponent(div.getAttribute('data-mermaid-code') || '');
+			const id = div.getAttribute('data-mermaid-id') || 'mermaid-' + Date.now() + '-' + Math.random();
+
+			try {
+				const svg = await renderMermaid(code, id);
+				if (svg) {
+					div.innerHTML = svg;
+				}
+			} catch (error) {
+				console.warn('Mermaid render failed, keeping raw output:', error);
+			}
+		}
+	}
 
 	let toolCallsExpanded = $state(false);
 	let toolResultsExpanded = $state(true);
@@ -64,7 +103,7 @@
 	}
 </script>
 
-<div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4">
+<div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4" data-message-id={message.id}>
 	<div class="{message.role === 'user' ? 'text-right' : 'text-left'}">
 		{#if message.role === 'assistant'}
 			<div class="markdown-content mb-1" onclick={handleCopyCode}>

@@ -359,6 +359,15 @@ function configureMarked(): void {
     const renderer = new marked.Renderer();
 
     renderer.code = ({ text, lang }: Tokens.Code) => {
+        if (lang === 'mermaid') {
+            const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+            return (
+                '<div class="mermaid-diagram" data-mermaid-id="' + id + '" data-mermaid-code="' + encodeURIComponent(text) + '">' +
+                '<pre class="mermaid-raw"><code>' + escapeHtml(text) + '</code></pre>' +
+                '</div>'
+            );
+        }
+
         const language = lang && hljs.getLanguage(lang) ? lang : "plaintext";
         const highlighted = hljs.highlight(text, { language }).value;
         return (
@@ -400,6 +409,6 @@ export function renderMarkdown(content: string): string {
 
     return DOMPurify.sanitize(html, {
         ADD_TAGS: ["pre", "code", "span", "div", "details", "summary"],
-        ADD_ATTR: ["class", "open"],
+        ADD_ATTR: ["class", "open", "data-mermaid-id", "data-mermaid-code"],
     });
 }

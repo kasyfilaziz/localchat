@@ -416,3 +416,32 @@ html, body {
 .dark .copy-code-btn.copied {
 	background: #059669;
 }
+
+.mermaid-diagram {
+	margin: 1rem 0;
+	text-align: center;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.mermaid-diagram svg {
+	max-width: 100%;
+	height: auto;
+	display: block;
+	margin: 0 auto;
+}
+
+.mermaid-raw {
+	background: #1f2937;
+	border-radius: 0.375rem;
+	padding: 0.75rem;
+	margin: 0.5rem 0;
+	overflow-x: auto;
+	white-space: pre;
+}
+
+.mermaid-raw code {
+	font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+	font-size: 0.8rem;
+	color: #e5e7eb;
+}
